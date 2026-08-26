@@ -23,7 +23,6 @@ interface AppState {
   scopeType: ScopeType;
   scopeLabel: string;
   notes: string;
-  followsSignoffId: string;
   requiresAllRecipients: boolean;
   recipients: RecipientInput[];
   orderedNodes: SelectedNode[];
@@ -45,7 +44,6 @@ const state: AppState = {
   scopeType: "single_frame",
   scopeLabel: "",
   notes: "",
-  followsSignoffId: "",
   requiresAllRecipients: true,
   recipients: [],
   orderedNodes: [],
@@ -327,11 +325,6 @@ function renderBody() {
           <label for="requires-all">Require every recipient to confirm before this counts as signed off</label>
         </div>
         <div class="field">
-          <label for="follows-id">Follows an earlier sign-off <span style="font-weight:400;color:var(--figma-color-text-tertiary,#999)">(optional)</span></label>
-          <input type="text" id="follows-id" placeholder="Paste the previous sign-off's ID, if any" />
-          <div class="hint">For grouping on the dashboard only — not required, and not enforced as a blocker.</div>
-        </div>
-        <div class="field">
           <label for="notes">Notes <span style="font-weight:400;color:var(--figma-color-text-tertiary,#999)">(optional)</span></label>
           <textarea id="notes" placeholder="Anything worth flagging to the client alongside this"></textarea>
         </div>
@@ -373,12 +366,6 @@ function wireFormView() {
   notesInput.value = state.notes;
   notesInput.oninput = () => {
     state.notes = notesInput.value;
-  };
-
-  const followsInput = document.getElementById("follows-id") as HTMLInputElement;
-  followsInput.value = state.followsSignoffId;
-  followsInput.oninput = () => {
-    state.followsSignoffId = followsInput.value;
   };
 
   const requiresAll = document.getElementById("requires-all") as HTMLInputElement;
@@ -674,7 +661,6 @@ function resetForm() {
   state.scopeType = "single_frame";
   state.scopeLabel = "";
   state.notes = "";
-  state.followsSignoffId = "";
   state.requiresAllRecipients = true;
   state.recipients = [];
   state.sendError = "";
@@ -720,7 +706,10 @@ async function handleSend() {
       scopeType: state.scopeType,
       scopeLabel: state.scopeLabel.trim() || computeScopeLabel(),
       requiresAllRecipients: state.requiresAllRecipients,
-      followsSignoffId: state.followsSignoffId.trim() || null,
+      // No UI for this yet — pasting a raw ID isn't a workable interaction.
+      // Once the dashboard exists, this should become a proper search
+      // (same pattern as the contact picker) rather than a text field.
+      followsSignoffId: null,
       notes: state.notes.trim(),
       createdBy: state.settings.createdBy.trim(),
       recipients: validRecipients(),

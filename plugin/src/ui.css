@@ -110,6 +110,7 @@ textarea {
   border: 1px solid var(--figma-color-border, #d5d5d5);
   border-radius: 4px;
   background: var(--figma-color-bg, #fff);
+  color: var(--figma-color-text, #1e1e1e);
   cursor: pointer;
   text-align: center;
 }
