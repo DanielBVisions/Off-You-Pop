@@ -1,0 +1,16 @@
+{
+  "name": "Off You Pop",
+  "id": "off-you-pop-signoff",
+  "api": "1.0.0",
+  "main": "dist/code.js",
+  "ui": "dist/ui.html",
+  "editorType": ["figma"],
+  "documentAccess": "dynamic-page",
+  "networkAccess": {
+    "allowedDomains": [
+      "http://localhost:3000",
+      "https://*.vercel.app"
+    ],
+    "reasoning": "Calls the Off You Pop sign-off backend to create records, look up saved contacts, and (once deployed) fetch its real production domain. Update this list once the backend has a permanent domain."
+  }
+}

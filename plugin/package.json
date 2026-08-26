@@ -1,0 +1,14 @@
+{
+  "name": "off-you-pop-plugin",
+  "version": "0.1.0",
+  "private": true,
+  "description": "Figma plugin for the Off You Pop client sign-off tool.",
+  "scripts": {
+    "build": "node scripts/build.mjs",
+    "typecheck": "tsc --noEmit"
+  },
+  "devDependencies": {
+    "@figma/plugin-typings": "^1.94.0",
+    "typescript": "^5.6.3"
+  }
+}
