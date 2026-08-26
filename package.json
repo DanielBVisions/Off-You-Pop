@@ -1,0 +1,11 @@
+{
+  "name": "off-you-pop",
+  "version": "0.1.0",
+  "private": true,
+  "description": "Backend + dashboard + landing page for the Off You Pop client sign-off tool. No dependencies by design — see README's 'Why no dependencies' section.",
+  "scripts": {
+    "dev": "node scripts/dev-server.mjs",
+    "test:pdf-zip": "node scripts/test-pdf-zip.js",
+    "test:smoke": "node scripts/local-smoke-test.mjs"
+  }
+}

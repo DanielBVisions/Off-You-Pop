@@ -63,6 +63,8 @@ interface PluginAPI {
   readonly ui: UiAPI;
   readonly clientStorage: ClientStorageAPI;
   readonly currentUser: { id: string; name: string } | null;
+  /** Undefined for a plugin running in a file with no key yet (e.g. never saved). */
+  readonly fileKey: string | undefined;
   showUI(html: string, options?: ShowUIOptions): void;
   on(event: "selectionchange", callback: () => void): void;
   notify(message: string, options?: NotificationOptions): void;

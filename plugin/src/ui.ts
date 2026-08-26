@@ -20,6 +20,7 @@ interface AppState {
   view: View;
   clientName: string;
   projectName: string;
+  figmaFileKey: string | null;
   scopeType: ScopeType;
   scopeLabel: string;
   notes: string;
@@ -41,6 +42,7 @@ const state: AppState = {
   view: "form",
   clientName: "",
   projectName: "",
+  figmaFileKey: null,
   scopeType: "single_frame",
   scopeLabel: "",
   notes: "",
@@ -114,6 +116,7 @@ window.onmessage = (event: MessageEvent) => {
       if (msg.name && !state.settings.createdBy.trim()) {
         state.settings.createdBy = msg.name;
       }
+      state.figmaFileKey = msg.fileKey;
       break;
 
     case "thumbnails":
@@ -703,6 +706,7 @@ async function handleSend() {
     const payload: CreateSignoffPayload = {
       clientName: state.clientName.trim(),
       projectName: state.projectName.trim(),
+      figmaFileKey: state.figmaFileKey,
       scopeType: state.scopeType,
       scopeLabel: state.scopeLabel.trim() || computeScopeLabel(),
       requiresAllRecipients: state.requiresAllRecipients,

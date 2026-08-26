@@ -40,6 +40,7 @@ export interface SnapshotMeta {
 export interface CreateSignoffPayload {
   clientName: string;
   projectName: string;
+  figmaFileKey: string | null;
   scopeType: ScopeType;
   scopeLabel: string;
   requiresAllRecipients: boolean;
@@ -75,7 +76,7 @@ export type UiToMainMessage =
 export type MainToUiMessage =
   | { type: "selection"; nodes: SelectedNode[] }
   | { type: "settings"; settings: PluginSettings }
-  | { type: "current-user"; name: string | null }
+  | { type: "current-user"; name: string | null; fileKey: string | null }
   | {
       type: "thumbnails";
       thumbnails: { id: string; bytes: number[] }[];

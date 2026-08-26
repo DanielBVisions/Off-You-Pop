@@ -30,6 +30,7 @@ rows in one call, uploading the exported frame images at the same time.
 {
   "clientName": "Acme Ltd",
   "projectName": "Acme Website Redesign",
+  "figmaFileKey": "AbCdEf123456", // figma.fileKey — required for branding scope (needed later for the Figma export API), null otherwise if unavailable
   "scopeType": "single_frame", // "single_frame" | "multi_frame" | "flow" | "branding"
   "scopeLabel": "Homepage only",
   "requiresAllRecipients": true,
@@ -150,22 +151,40 @@ Nothing about that path is a special case.
 
 ---
 
-## Auth (open item)
+## Auth — resolved
 
-The plugin currently sends no auth header — it's assumed the backend's
-`/api/signoffs` and `/api/contacts` endpoints are reachable from the
-plugin's network context without a login flow (Figma plugins can't do
-interactive OAuth redirects easily). Once the backend exists, decide
-between:
+Plugin-facing endpoints (`POST /api/signoffs`, `GET /api/contacts`,
+`GET /api/signoffs`) check `Authorization: Bearer <PLUGIN_API_KEY>`
+**only if** the backend has a `PLUGIN_API_KEY` env var set — see
+`lib/auth-guard.js`'s `requirePluginKey`. Unset (e.g. fresh local dev),
+they're open. This matches what the plugin already does (sends the header
+whenever a key is set in its Settings panel, omits it otherwise), so
+turning this on later is just setting one env var and telling the team
+their key — no code change on either side.
 
-- A long-lived API key pasted into the plugin's Settings panel
-  (`Authorization: Bearer <key>`), issued from the dashboard per team
-  member — simplest, fits Figma's constraints.
-- Something tied to Figma's own OAuth, if ever needed.
+The dashboard uses a separate mechanism entirely: Supabase Auth
+(email/password) plus a `team_members` row for role — see README's
+"Environment variables" and "Provisioning a dashboard user" sections.
 
-The plugin's `api.ts` already sends `Authorization: Bearer <apiKey>` if
-a key is present in settings, so wiring this up later is a small change,
-not a redesign.
+---
+
+## Public link scheme — recipient-scoped, not record-scoped
+
+`POST /api/signoffs` returns one `landingUrl`, but it's built as
+`{SITE_URL}/s/{recipientId}` — keyed by the **recipient's** id, not the
+signoff record's id. Same for the certificate link
+(`{SITE_URL}/api/certificate/{recipientId}`). This wasn't obvious from the
+tech spec's "unique, unguessable landing page URL" language (singular),
+which reads like one shared link per record — but that can't be reconciled
+with the spec's own requirement that "each recipient's viewed/signed
+status is tracked individually": if every recipient on a multi-recipient
+record opened the *same* URL, there'd be no way to know which of them was
+viewing or signing at any given moment. A recipient-scoped link (still a
+random UUID, still unguessable, still no login) is what makes that
+tracking actually possible — each person named on a record gets emailed
+their own link, all showing the same scope/snapshots, each tracked
+independently. The dashboard groups them under the shared
+`signoff_id` regardless.
 
 ---
 

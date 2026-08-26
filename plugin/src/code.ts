@@ -77,6 +77,7 @@ figma.ui.onmessage = async (msg: UiToMainMessage) => {
       postToUi({
         type: "current-user",
         name: figma.currentUser?.name ?? null,
+        fileKey: figma.fileKey ?? null,
       });
       break;
     }
