@@ -103,6 +103,53 @@ Empty `query` returns the most recently used contacts (suggest capping at
 
 ---
 
+## `GET /api/signoffs?client_name=<string>` (planned — not yet built)
+
+Not called by the plugin yet. The "this follows an earlier sign-off" field
+was pulled from the plugin UI (see brief/tech spec §3.4, `follows_signoff_id`)
+because asking someone to paste a raw record ID isn't a workable
+interaction, and there's nothing to build a working version against until
+this endpoint exists. `followsSignoffId` is still sent as `null` in every
+`POST /api/signoffs` payload in the meantime — the field itself isn't
+going away, just the broken input for it.
+
+The intended UX, once this exists, mirrors the contact search exactly:
+type the client name, get back that client's prior sign-off records, pick
+one (or leave it unpicked — this is always optional, and per the "staged
+sign-off" decision below, never required even when a project clearly has
+an earlier stage).
+
+**Response (proposed):**
+
+```json
+{
+  "signoffs": [
+    {
+      "id": "a1...",
+      "projectName": "Acme Website Redesign",
+      "scopeLabel": "Homepage only",
+      "status": "signed",
+      "createdAt": "2026-08-01T09:00:00Z"
+    }
+  ]
+}
+```
+
+Only records for the given client, most recent first. Whether to also
+filter to `status = "signed"` (you can only follow on from something
+that's actually done) is a call for whoever builds this — either is
+defensible, and it's a cheap change either way.
+
+**A project doesn't need a homepage-stage record to exist at all.** The
+staged pattern (homepage → full site → branding) in the tech spec is one
+way teams can work, not a requirement the tool enforces — see "Sequencing"
+in the root README. A team going straight to "homepage + inner pages" as
+one combined sign-off just creates a single `multi_frame` record with
+`followsSignoffId: null`, same as any record with nothing before it.
+Nothing about that path is a special case.
+
+---
+
 ## Auth (open item)
 
 The plugin currently sends no auth header — it's assumed the backend's
