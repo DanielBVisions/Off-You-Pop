@@ -74,6 +74,16 @@ async function main() {
   } catch {}
   psqlAsRoot(`CREATE DATABASE ${PGDATABASE};`);
   psql(`create schema if not exists auth; create table if not exists auth.users (id uuid primary key);`);
+  // Supabase projects always have these three roles built in; a vanilla
+  // Postgres doesn't, so schema.sql's grants (added after hitting
+  // "permission denied for schema off_you_pop" against a real project —
+  // service_role bypasses RLS but not schema-level grants) need them
+  // stubbed here to apply locally at all.
+  psql(`do $$ begin
+    if not exists (select from pg_roles where rolname = 'anon') then create role anon; end if;
+    if not exists (select from pg_roles where rolname = 'authenticated') then create role authenticated; end if;
+    if not exists (select from pg_roles where rolname = 'service_role') then create role service_role; end if;
+  end $$;`);
   execFileSync("psql", ["-d", PGDATABASE, "-v", "ON_ERROR_STOP=1", "-f", path.join(root, "supabase/schema.sql")], {
     uid: 102,
     gid: 104,

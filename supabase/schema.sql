@@ -238,3 +238,22 @@ alter table recipients enable row level security;
 alter table event_log enable row level security;
 alter table certificates enable row level security;
 alter table branding_exports enable row level security;
+
+-- ---------------------------------------------------------------------------
+-- Schema-level grants — required, not optional, for a custom schema.
+-- Supabase auto-grants its standard roles (anon/authenticated/service_role)
+-- access to the `public` schema at project creation, but that's specific
+-- to `public` — a schema you create yourself (like off_you_pop) starts
+-- with none of that, and every request fails with "permission denied for
+-- schema off_you_pop" until these are run, even from the service_role key,
+-- even though service_role bypasses RLS (RLS bypass and schema-level
+-- grants are two separate permission layers in Postgres).
+-- ---------------------------------------------------------------------------
+
+grant usage on schema off_you_pop to anon, authenticated, service_role;
+grant all on all tables in schema off_you_pop to anon, authenticated, service_role;
+grant all on all routines in schema off_you_pop to anon, authenticated, service_role;
+grant all on all sequences in schema off_you_pop to anon, authenticated, service_role;
+alter default privileges in schema off_you_pop grant all on tables to anon, authenticated, service_role;
+alter default privileges in schema off_you_pop grant all on routines to anon, authenticated, service_role;
+alter default privileges in schema off_you_pop grant all on sequences to anon, authenticated, service_role;
