@@ -83,7 +83,7 @@ async function main() {
 
   const TEST_USER_ID = "00000000-0000-0000-0000-000000000001";
   psql(`insert into auth.users (id) values ('${TEST_USER_ID}');`);
-  psql(`insert into team_members (id, email, name, role) values ('${TEST_USER_ID}', 'dan@example.com', 'Dan', 'admin');`);
+  psql(`insert into off_you_pop.team_members (id, email, name, role) values ('${TEST_USER_ID}', 'dan@example.com', 'Dan', 'admin');`);
   pass("seeded admin team member");
 
   log("Starting mock external services + dev server...");

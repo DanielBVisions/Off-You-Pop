@@ -4,10 +4,21 @@
 -- convention; the API layer maps to/from the camelCase names used in
 -- docs/api-contract.md and the plugin's payloads).
 --
--- Run this once against a fresh Supabase project's SQL editor. Idempotent
--- guards (`if not exists` / `drop ... if exists`) make it safe to re-run.
+-- Everything lives in its own `off_you_pop` schema, not `public` — so this
+-- is safe to run against an existing Supabase project that already has
+-- other tables/apps in it (no free project slot needed just for this).
+-- Idempotent guards (`if not exists` / `drop ... if exists`) make it safe
+-- to re-run.
+--
+-- ONE-TIME MANUAL STEP after running this: in the Supabase dashboard, go
+-- to Settings → API → "Exposed schemas" and add `off_you_pop` to the list
+-- (PostgREST only serves `public` by default). Without this, every API
+-- call will 404/406 against a schema PostgREST doesn't know to look in.
 
 create extension if not exists pgcrypto; -- gen_random_uuid()
+
+create schema if not exists off_you_pop;
+set search_path to off_you_pop, public;
 
 -- ---------------------------------------------------------------------------
 -- team_members — dashboard users. id matches auth.users(id); Supabase Auth

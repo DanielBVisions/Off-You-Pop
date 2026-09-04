@@ -1,6 +1,7 @@
 -- Sanity checks for schema.sql business rules. Run against the local test
 -- DB; expects two intentional ERROR lines (locking + append-only guards).
 \set ON_ERROR_STOP off
+set search_path to off_you_pop, public;
 
 insert into auth.users (id) values ('00000000-0000-0000-0000-000000000001');
 insert into team_members (id, email, name, role)

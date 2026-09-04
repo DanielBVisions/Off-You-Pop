@@ -100,25 +100,39 @@ mocks or real provisioned services).
 | `SITE_URL` | Your deployed URL (e.g. `https://off-you-pop.vercel.app`) — used to build landing/certificate links |
 | `PLUGIN_API_KEY` | Optional — see `docs/api-contract.md`'s "Auth" section. Unset = plugin endpoints are open |
 | `TEAM_NOTIFICATION_EMAIL` | Optional, comma-separated — who gets the internal "signed" notification |
+| `SUPABASE_DB_SCHEMA` | Optional, default `off_you_pop` — see "Provisioning Supabase" below. Only change this if you deliberately renamed the schema in `schema.sql` |
 
 Set these in Vercel's Project Settings → Environment Variables.
 
 ## Provisioning Supabase
 
-1. Create a project at [supabase.com](https://supabase.com) (free tier is fine).
+**You don't need a dedicated/new Supabase project.** Everything here lives
+in its own `off_you_pop` Postgres schema, not `public` — so this installs
+cleanly into a project you're already using for something else, with zero
+risk to your existing tables (handy if you're on the free tier's 2-project
+limit).
+
+1. Open an existing project, or create one at [supabase.com](https://supabase.com) (free tier is fine either way).
 2. SQL Editor → run [`supabase/schema.sql`](supabase/schema.sql) in full.
-3. Storage → create two **public** buckets: `snapshots` and `branding-exports`.
-4. Authentication → add a user (email/password) for each dashboard teammate.
-5. SQL Editor → for each of those users, insert their `team_members` row:
+3. **Settings → API → "Exposed schemas"** → add `off_you_pop` to the list.
+   This step is easy to miss and required — PostgREST only serves `public`
+   by default, so without this every API call 404s/406s even though the
+   tables exist and the URL/keys are right.
+4. Storage → create two **public** buckets: `snapshots` and `branding-exports`.
+   (If those names collide with buckets an existing project already uses
+   for something else, rename them here and update the bucket names in
+   `lib/branding-export.js` and `api/signoffs/index.js` to match.)
+5. Authentication → add a user (email/password) for each dashboard teammate.
+6. SQL Editor → for each of those users, insert their `team_members` row:
    ```sql
-   insert into team_members (id, email, name, role)
+   insert into off_you_pop.team_members (id, email, name, role)
    values ('<their auth.users id>', 'dan@example.com', 'Dan', 'admin');
    -- role is 'viewer' or 'admin' — see tech-spec.md §3.5
    ```
    There's no self-signup for the dashboard by design — a Supabase Auth
    account alone isn't enough to log in; the `team_members` row is what
    grants dashboard access at all, and its `role` decides what they can do.
-6. Settings → API → copy the Project URL, `anon` key, and `service_role`
+7. Settings → API → copy the Project URL, `anon` key, and `service_role`
    key into your env vars above.
 
 ## Deploying
@@ -153,6 +167,10 @@ env vars above, deploy, then:
   grouping only, never a blocker.
 - **Public links are per-recipient, not per-record** — see
   `docs/api-contract.md`'s "Public link scheme" section for why.
+- **Isolated Supabase schema (`off_you_pop`), not `public`** — added after
+  hitting the free tier's project limit while testing. Lets this share an
+  existing Supabase project with anything else already in it, rather than
+  needing a dedicated one. See "Provisioning Supabase" above.
 - **Plugin auth**: an optional `PLUGIN_API_KEY` — see `docs/api-contract.md`'s
   "Auth" section.
 - **Branding export formats:** exports both PNG and SVG for every

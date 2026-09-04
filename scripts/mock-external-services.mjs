@@ -72,6 +72,15 @@ function sqlIdent(name) {
   return `"${name}"`;
 }
 
+// schema.sql creates everything under off_you_pop, not public — see its
+// header comment (lets a real deployment share a Supabase project with
+// other apps). Table references need that schema qualifying; column
+// references (sqlIdent above) don't.
+const DB_SCHEMA = process.env.MOCK_DB_SCHEMA || "off_you_pop";
+function sqlTable(name) {
+  return `${sqlIdent(DB_SCHEMA)}.${sqlIdent(name)}`;
+}
+
 function conditionToSql(column, opValue, params, pIndex) {
   const [op, ...rest] = opValue.split(".");
   const raw = rest.join(".");
@@ -143,7 +152,7 @@ function jsonLiteral(value) {
 
 function handleSelect(table, url, singleRequested) {
   const { where, orderClause, limitClause, params } = buildWhereAndOrder(url.searchParams);
-  const sql = `SELECT coalesce(json_agg(row_to_json(t)), '[]'::json) FROM (SELECT * FROM ${sqlIdent(table)}${where}${orderClause}${limitClause}) t;`;
+  const sql = `SELECT coalesce(json_agg(row_to_json(t)), '[]'::json) FROM (SELECT * FROM ${sqlTable(table)}${where}${orderClause}${limitClause}) t;`;
   const rows = psqlJson(sql, params);
   if (singleRequested) {
     if (rows.length !== 1) return { status: 406, body: { message: "not exactly one row" } };
@@ -162,7 +171,7 @@ function handleInsert(table, url, body, prefer) {
     const columns = Object.keys(row);
     const colSql = columns.map(sqlIdent).join(", ");
     const valSql = columns.map((c) => jsonLiteral(row[c])).join(", ");
-    let sql = `INSERT INTO ${sqlIdent(table)} (${colSql}) VALUES (${valSql})`;
+    let sql = `INSERT INTO ${sqlTable(table)} (${colSql}) VALUES (${valSql})`;
     if (isUpsert) {
       const updateSql = columns
         .filter((c) => c !== onConflict)
@@ -182,7 +191,7 @@ function handleUpdate(table, url, patch) {
   const setSql = Object.keys(patch)
     .map((c) => `${sqlIdent(c)} = ${jsonLiteral(patch[c])}`)
     .join(", ");
-  const sql = `WITH upd AS (UPDATE ${sqlIdent(table)} SET ${setSql}${where} RETURNING *) SELECT coalesce(json_agg(row_to_json(upd)), '[]'::json) FROM upd;`;
+  const sql = `WITH upd AS (UPDATE ${sqlTable(table)} SET ${setSql}${where} RETURNING *) SELECT coalesce(json_agg(row_to_json(upd)), '[]'::json) FROM upd;`;
   try {
     const rows = psqlJson(sql, params);
     return { status: 200, body: rows };
