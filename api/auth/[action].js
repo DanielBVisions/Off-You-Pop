@@ -1,13 +1,14 @@
-// POST /api/auth/login — dashboard sign-in. Verifies credentials against
-// Supabase Auth, then requires a matching team_members row (role
-// provisioning is manual — see supabase/schema.sql's comment and README
-// setup — there's no self-signup for the dashboard).
+// POST /api/auth/login and POST /api/auth/logout — merged into one
+// function file (Vercel counts each file under /api separately against
+// the plan's function-count limit; login+logout are simple enough to
+// safely share one). URLs and behavior are unchanged from when these
+// were api/auth/login.js and api/auth/logout.js.
 
-const { readJsonBody, sendJson, methodNotAllowed, withErrorHandling } = require("../../lib/http");
+const { pathSegments, readJsonBody, sendJson, methodNotAllowed, withErrorHandling } = require("../../lib/http");
 const { signInWithPassword, pgSelect } = require("../../lib/supabase");
-const { createSessionCookie } = require("../../lib/session");
+const { createSessionCookie, clearSessionCookie } = require("../../lib/session");
 
-module.exports = withErrorHandling(async (req, res) => {
+async function handleLogin(req, res) {
   if (req.method !== "POST") return methodNotAllowed(res, ["POST"]);
 
   const { email, password } = await readJsonBody(req);
@@ -38,4 +39,17 @@ module.exports = withErrorHandling(async (req, res) => {
 
   res.setHeader("Set-Cookie", cookie);
   return sendJson(res, 200, { ok: true, role: member.role, name: member.name });
+}
+
+async function handleLogout(req, res) {
+  if (req.method !== "POST") return methodNotAllowed(res, ["POST"]);
+  res.setHeader("Set-Cookie", clearSessionCookie());
+  return sendJson(res, 200, { ok: true });
+}
+
+module.exports = withErrorHandling(async (req, res) => {
+  const action = pathSegments(req)[2]; // ['api','auth', action]
+  if (action === "login") return handleLogin(req, res);
+  if (action === "logout") return handleLogout(req, res);
+  return sendJson(res, 404, { error: `Unknown auth action: ${action}` });
 });
