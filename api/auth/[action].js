@@ -18,7 +18,11 @@ async function handleLogin(req, res) {
   try {
     authResult = await signInWithPassword(email, password);
   } catch (err) {
-    return sendJson(res, 401, { error: "Invalid email or password" });
+    // Surface Supabase's actual error text (e.g. "Invalid login
+    // credentials" vs "Invalid API key" vs a network error) rather than
+    // a generic message that hides misconfiguration behind what looks
+    // like a wrong-password error.
+    return sendJson(res, 401, { error: `Sign-in failed: ${err.message}` });
   }
 
   const member = await pgSelect("team_members", [`id=eq.${authResult.user.id}`], { single: true }).catch(() => null);
