@@ -67,6 +67,21 @@ async function exportNodePng(
   });
 }
 
+// Vector, not raster: a PNG at any fixed scale is only ever crisp up to the
+// pixel density it was exported at, and the landing page displays a frame
+// at whatever width the client's browser window happens to be — no single
+// scale is guaranteed to still look sharp there. SVG has no fixed
+// resolution, so it stays crisp at full-bleed on any screen, any zoom.
+// svgOutlineText converts text to paths at export time (Figma's own
+// default), so the design doesn't depend on the viewer's browser having
+// the same fonts installed.
+async function exportNodeSvg(node: SceneNode): Promise<Uint8Array> {
+  return node.exportAsync({
+    format: "SVG",
+    svgOutlineText: true,
+  });
+}
+
 figma.on("selectionchange", pushSelection);
 
 figma.ui.onmessage = async (msg: UiToMainMessage) => {
@@ -112,16 +127,15 @@ figma.ui.onmessage = async (msg: UiToMainMessage) => {
 
     case "request-full-export": {
       try {
-        // 2x: the landing page now displays each frame full-bleed at the
-        // browser's own width, often well beyond the frame's native design
-        // width — a 1x export (this project's original setting, chosen to
-        // keep upload size down before the create flow was split into a
-        // per-frame upload step) looked visibly blurry once stretched to
-        // fill the screen. The per-frame upload (not one combined request)
-        // means Vercel's body-size limit applies per image, not to the
-        // whole batch, so the larger export is safe against it in the
-        // normal case; an unusually large frame would still surface as a
-        // real upload error rather than fail silently.
+        // SVG, not PNG: the landing page displays each frame full-bleed at
+        // whatever width the client's browser happens to be, and no single
+        // fixed-scale raster export stays crisp across every possible
+        // screen size/pixel density (tried 1x, tried 2x — both eventually
+        // looked blurry somewhere). SVG has no fixed resolution, so this
+        // sidesteps the problem rather than tuning a scale number forever.
+        // The per-frame upload step (not one combined request) still keeps
+        // each upload well under Vercel's body-size limit even for a
+        // complex, vector-heavy frame.
         const exports: { id: string; name: string; bytes: number[] }[] = [];
         for (const id of msg.nodeIds) {
           const node = selectedNodesById.get(id);
@@ -130,7 +144,7 @@ figma.ui.onmessage = async (msg: UiToMainMessage) => {
               `A selected frame ("${id}") is no longer available — it may have been deleted or deselected. Re-select your frames and try again.`,
             );
           }
-          const bytes = await exportNodePng(node, 2);
+          const bytes = await exportNodeSvg(node);
           exports.push({ id, name: node.name, bytes: Array.from(bytes) });
         }
         postToUi({

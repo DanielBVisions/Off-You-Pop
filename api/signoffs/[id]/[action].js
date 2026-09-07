@@ -119,19 +119,34 @@ async function handleReset(req, res, id, auth) {
   return sendJson(res, 200, { id, status: updated.status });
 }
 
+// image/svg+xml -> .svg, image/png -> .png, etc. — the extension is only
+// for a sane-looking Storage path/URL; nothing serves or interprets it,
+// the browser goes by the stored Content-Type when it fetches the image.
+function extensionForContentType(contentType) {
+  const type = contentType.split(";")[0].trim().toLowerCase();
+  if (type === "image/svg+xml") return "svg";
+  if (type === "image/jpeg") return "jpg";
+  return "png";
+}
+
 // --- snapshot: called by the plugin once per frame, right after create
-// returns. Body is the raw PNG bytes for one frame_snapshots row (given
-// by ?snapshotId=, from create's response) — uploads it to Storage and
-// fills in that row's snapshot_url, which starts empty at creation. ---
+// returns. Body is the raw image bytes for one frame_snapshots row (given
+// by ?snapshotId=, from create's response) — the plugin exports SVG (see
+// plugin/src/code.ts's exportNodeSvg for why: no fixed raster resolution
+// stayed crisp once the landing page started displaying frames full-bleed
+// at whatever width the browser happens to be), but this endpoint doesn't
+// assume a format — it uploads whatever Content-Type is actually sent, so
+// e.g. the smoke test's PNG fixture still works unchanged. Fills in that
+// row's snapshot_url, which starts empty at creation. ---
 async function handleSnapshot(req, res, id) {
   const snapshotId = query(req).get("snapshotId");
   if (!snapshotId) return sendJson(res, 400, { error: "snapshotId query param is required" });
 
   const bytes = await readRawBody(req);
-  if (bytes.length === 0) return sendJson(res, 400, { error: "Empty request body — expected PNG image bytes" });
+  if (bytes.length === 0) return sendJson(res, 400, { error: "Empty request body — expected image bytes" });
 
   const contentType = req.headers["content-type"] || "image/png";
-  const path = `${id}/${snapshotId}.png`;
+  const path = `${id}/${snapshotId}.${extensionForContentType(contentType)}`;
   const url = await uploadToStorage("snapshots", path, bytes, contentType);
 
   const updated = await pgUpdate(

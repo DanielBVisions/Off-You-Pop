@@ -12,6 +12,14 @@
 interface ExportSettingsImage {
   format: "PNG" | "JPG" | "SVG" | "PDF";
   constraint?: { type: "SCALE" | "WIDTH" | "HEIGHT"; value: number };
+  // SVG-only. svgOutlineText (Figma defaults this to true) converts text to
+  // paths at export time, so the frame renders identically regardless of
+  // whether the viewing browser has the design's fonts installed — worth
+  // being explicit about given this is a client-facing sign-off page, not
+  // an internal tool where a font mismatch would just be a minor cosmetic
+  // issue.
+  svgOutlineText?: boolean;
+  svgIdAttribute?: boolean;
 }
 
 interface BaseNode {

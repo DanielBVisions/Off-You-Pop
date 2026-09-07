@@ -179,6 +179,23 @@ async function main() {
   );
   pass(`created ${createBody.id}`);
 
+  // The plugin now exports SVG, not PNG (see plugin/src/code.ts) — the
+  // snapshot endpoint has to actually honor whatever Content-Type it's
+  // given rather than hardcoding .png, or every real upload from the
+  // rebuilt plugin would get mislabeled in Storage. Re-upload onto the
+  // same already-created row with an SVG body and confirm the extension
+  // follows the real content type.
+  const svgSnapshotId = createBody.snapshots[0].id;
+  const svgUploadRes = await fetch(`${base}/api/signoffs/${createBody.id}/snapshot?snapshotId=${svgSnapshotId}`, {
+    method: "POST",
+    headers: { "Content-Type": "image/svg+xml" },
+    body: '<svg xmlns="http://www.w3.org/2000/svg" width="10" height="10"></svg>',
+  });
+  const svgUploadBody = await svgUploadRes.json();
+  assert.strictEqual(svgUploadRes.status, 200, `SVG snapshot upload status 200, got ${JSON.stringify(svgUploadBody)}`);
+  assert.match(svgUploadBody.snapshotUrl, /\.svg$/, "SVG upload is stored with a .svg extension, not hardcoded .png");
+  pass("SVG snapshot upload stores with the correct extension");
+
   const recipientId = createBody.landingUrl.split("/").pop();
 
   // --- 2. Landing page shows the sign form ---
