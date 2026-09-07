@@ -192,14 +192,15 @@ async function main() {
 
   // --- 2b. Regression test for the nested-html`` double-escaping bug: the
   // sign-off confirmation modal (rendered via a nested html`` call inside
-  // renderSignForm) must appear as real markup, not as escaped entities
-  // sitting visibly in the page body. Also checks the stage chip (the
-  // project-info overlay that replaced the old light-colored header block
-  // above the carousel) renders correctly. ---
+  // renderSignOffModal) must appear as real markup, not as escaped entities
+  // sitting visibly in the page body. Also checks the sticky top bar (the
+  // project-info + Sign off button that replaced the old light-colored
+  // header block above the carousel) renders correctly. ---
   assert.match(landingHtml1, /<h2>Confirm sign-off<\/h2>/, "sign-off modal renders as real markup, not escaped");
   assert.doesNotMatch(landingHtml1, /&lt;h2&gt;Confirm sign-off/, "sign-off modal is not double-escaped");
-  assert.match(landingHtml1, /<span class="stage-chip-title">Acme Website Redesign<\/span>/, "stage chip shows the project name");
-  pass("nested modal markup is not double-escaped, and the stage chip renders correctly");
+  assert.match(landingHtml1, /<span class="stage-bar-title">Acme Website Redesign<\/span>/, "stage bar shows the project name");
+  assert.match(landingHtml1, /id="signoff-btn"/, "sign-off button renders in the stage bar");
+  pass("nested modal markup is not double-escaped, and the stage bar renders correctly");
 
   // --- 3. View event ---
   log("POST view event...");

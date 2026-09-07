@@ -112,11 +112,16 @@ figma.ui.onmessage = async (msg: UiToMainMessage) => {
 
     case "request-full-export": {
       try {
-        // 1x, not 2x: these are viewed on screen (landing page, dashboard,
-        // certificate reference), not printed — 2x roughly doubled export
-        // time and upload size per frame for no real benefit, and was part
-        // of what made multi-frame sign-offs slow even after fixing the
-        // request-size limit itself.
+        // 2x: the landing page now displays each frame full-bleed at the
+        // browser's own width, often well beyond the frame's native design
+        // width — a 1x export (this project's original setting, chosen to
+        // keep upload size down before the create flow was split into a
+        // per-frame upload step) looked visibly blurry once stretched to
+        // fill the screen. The per-frame upload (not one combined request)
+        // means Vercel's body-size limit applies per image, not to the
+        // whole batch, so the larger export is safe against it in the
+        // normal case; an unusually large frame would still surface as a
+        // real upload error rather than fail silently.
         const exports: { id: string; name: string; bytes: number[] }[] = [];
         for (const id of msg.nodeIds) {
           const node = selectedNodesById.get(id);
@@ -125,7 +130,7 @@ figma.ui.onmessage = async (msg: UiToMainMessage) => {
               `A selected frame ("${id}") is no longer available — it may have been deleted or deselected. Re-select your frames and try again.`,
             );
           }
-          const bytes = await exportNodePng(node, 1);
+          const bytes = await exportNodePng(node, 2);
           exports.push({ id, name: node.name, bytes: Array.from(bytes) });
         }
         postToUi({
