@@ -103,8 +103,22 @@ create table if not exists frame_snapshots (
   figma_node_name text not null default '',
   snapshot_url text not null,
   sequence_order integer not null default 0,
-  created_at timestamptz not null default now()
+  created_at timestamptz not null default now(),
+  -- The frame's actual width/height on the Figma canvas — deliberately
+  -- separate from whatever resolution the uploaded image ends up at (a
+  -- heavier frame may export at a lower scale than a lighter sibling just
+  -- to fit the upload size limit). The landing page sizes each frame's
+  -- display width off this design width, not off the image's own pixel
+  -- size, so two frames that are genuinely the same width on the artboard
+  -- display the same width in the sign-off. Nullable: added after this
+  -- table's first deploy, so `if not exists` below covers an
+  -- already-created database too, not just a fresh one.
+  figma_frame_width integer,
+  figma_frame_height integer
 );
+
+alter table frame_snapshots add column if not exists figma_frame_width integer;
+alter table frame_snapshots add column if not exists figma_frame_height integer;
 
 create index if not exists frame_snapshots_signoff_idx on frame_snapshots (signoff_id, sequence_order);
 

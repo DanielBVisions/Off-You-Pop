@@ -35,6 +35,15 @@ export interface SnapshotMeta {
   figmaFrameKey: string;
   figmaNodeName: string;
   sequenceOrder: number;
+  // The frame's actual width/height on the Figma canvas — independent of
+  // whatever resolution it ends up exported at (a heavier frame may fall
+  // back to a lower export scale than a lighter one purely to fit the
+  // upload size limit). The landing page sizes each frame's display width
+  // off this design width, not off the exported bitmap's own pixel size,
+  // so frames that are genuinely the same width on the artboard display
+  // the same width in the sign-off regardless of export scale.
+  figmaFrameWidth: number;
+  figmaFrameHeight: number;
 }
 
 export interface CreateSignoffPayload {

@@ -56,6 +56,8 @@ async function handleCreate(req, res) {
     figma_node_name: meta.figmaNodeName || "",
     snapshot_url: "",
     sequence_order: meta.sequenceOrder ?? i,
+    figma_frame_width: meta.figmaFrameWidth || null,
+    figma_frame_height: meta.figmaFrameHeight || null,
   }));
   const insertedSnapshots = await pgInsert("frame_snapshots", snapshotRows);
   const snapshots = insertedSnapshots

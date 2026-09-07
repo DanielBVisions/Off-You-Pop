@@ -173,7 +173,7 @@ async function main() {
       notes: "First cut of the homepage.",
       createdBy: "Dan",
       recipients: [{ name: "Jo Client", email: "jo@acme.com", contactId: null }],
-      snapshots: [{ figmaFrameKey: "1:23", figmaNodeName: "Homepage", sequenceOrder: 0 }],
+      snapshots: [{ figmaFrameKey: "1:23", figmaNodeName: "Homepage", sequenceOrder: 0, figmaFrameWidth: 1440, figmaFrameHeight: 900 }],
     },
     [onePxPng],
   );
@@ -205,6 +205,7 @@ async function main() {
   assert.strictEqual(landingRes1.status, 200);
   assert.match(landingHtml1, /Acme Website Redesign/);
   assert.match(landingHtml1, /Sign off/);
+  assert.match(landingHtml1, /style="width:1440px"/, "frame displays at its recorded Figma design width, not the exported image's own pixel size");
   pass("landing page renders scope + sign button");
 
   // --- 2b. Regression test for the nested-html`` double-escaping bug: the
@@ -327,8 +328,8 @@ async function main() {
       createdBy: "Dan",
       recipients: [{ name: "Jo Client", email: "jo@acme.com", contactId: null }],
       snapshots: [
-        { figmaFrameKey: "10:1", figmaNodeName: "Logo Primary", sequenceOrder: 0 },
-        { figmaFrameKey: "10:2", figmaNodeName: "Logo Mono", sequenceOrder: 1 },
+        { figmaFrameKey: "10:1", figmaNodeName: "Logo Primary", sequenceOrder: 0, figmaFrameWidth: 800, figmaFrameHeight: 800 },
+        { figmaFrameKey: "10:2", figmaNodeName: "Logo Mono", sequenceOrder: 1, figmaFrameWidth: 400, figmaFrameHeight: 400 },
       ],
     },
     [onePxPng, onePxPng],
@@ -342,7 +343,9 @@ async function main() {
   assert.match(brandLandingHtml, /id="carousel-prev"/, "carousel has a prev button for multi-frame sign-offs");
   assert.match(brandLandingHtml, /id="carousel-next"/, "carousel has a next button for multi-frame sign-offs");
   assert.match(brandLandingHtml, /Logo Primary · 1 \/ 2/, "counter pill shows the first frame's name alongside 1 / 2");
-  pass("multi-frame carousel renders nav + name-and-counter pill");
+  assert.match(brandLandingHtml, /style="width:800px"/, "first frame uses its own recorded design width");
+  assert.match(brandLandingHtml, /style="width:400px"/, "second frame uses its own (different) recorded design width, independent of the first");
+  pass("multi-frame carousel renders nav + name-and-counter pill, each frame at its own design width");
 
   const brandSignRes = await fetch(`${base}/api/recipients/${brandRecipientId}/sign`, { method: "POST", body: "{}" });
   const brandSignBody = await brandSignRes.json();

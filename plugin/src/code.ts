@@ -78,43 +78,37 @@ async function exportNodeJpg(
 }
 
 // Stay comfortably under Vercel's hard 4.5MB request-body limit for a
-// single upload — this is what each frame's own upload is checked against,
-// not a total across frames (each frame uploads in its own request).
+// single upload — checked per frame, not as a total across frames (each
+// frame uploads in its own request).
 const MAX_UPLOAD_BYTES = 4 * 1024 * 1024;
 
-// Tried in order until the whole batch fits.
+// Tried in order until this one frame's export fits.
 const EXPORT_SCALES = [2, 1, 0.5, 0.25];
 
 // JPG, not PNG: PNG is lossless, and a large, content-heavy page (lots of
-// gradients/photos/sections) can produce a multi-frame export that's still
-// too big at 2x even after the create flow was split into one upload per
-// frame — a real 413 in production, not a theoretical concern (this is the
-// second time this exact limit has bitten this project; the first time is
-// what motivated the per-frame upload split in the first place). JPG's
-// lossy compression is dramatically smaller for this kind of content with
-// no visible quality loss at sign-off review size.
+// gradients/photos/sections) can produce an export that's still too big at
+// 2x even after the create flow was split into one upload per frame — a
+// real 413 in production, not a theoretical concern (this is the second
+// time this exact limit has bitten this project; the first time is what
+// motivated the per-frame upload split in the first place). JPG's lossy
+// compression is dramatically smaller for this kind of content with no
+// visible quality loss at sign-off review size.
 //
-// All frames in one sign-off are exported at the SAME scale, not each
-// independently falling back on its own — a per-frame fallback meant two
-// frames of the identical design width could end up at genuinely different
-// pixel resolutions (a heavy frame silently shrunk more than a light one),
-// which the landing page's native-resolution-capped display then renders
-// as visibly different widths even though the design width is the same.
-// Every scale in EXPORT_SCALES is tried against the whole batch; only the
-// heaviest frame in it needs to be over the limit to drop to the next one.
-async function exportNodesForUpload(
-  nodes: SceneNode[],
-): Promise<Uint8Array[]> {
-  let results: Uint8Array[] = [];
+// Each frame falls back independently — a heavier frame dropping to a
+// lower export scale than a lighter sibling is fine; export resolution is
+// purely a "does this fit in one upload" concern. Two frames that share
+// the same Figma design width still need to display at the same width on
+// the landing page regardless of what scale each ended up exported at —
+// that's handled there by sizing off the frame's actual design width
+// (sent alongside each snapshot), not off the exported bitmap's own pixel
+// size. See lib/landing-template.js.
+async function exportNodeForUpload(node: SceneNode): Promise<Uint8Array> {
+  let bytes = new Uint8Array();
   for (const scale of EXPORT_SCALES) {
-    results = [];
-    for (const node of nodes) {
-      results.push(await exportNodeJpg(node, scale));
-    }
-    const heaviest = Math.max(...results.map((r) => r.length));
-    if (heaviest <= MAX_UPLOAD_BYTES) break;
+    bytes = await exportNodeJpg(node, scale);
+    if (bytes.length <= MAX_UPLOAD_BYTES) break;
   }
-  return results;
+  return bytes;
 }
 
 figma.on("selectionchange", pushSelection);
@@ -162,33 +156,26 @@ figma.ui.onmessage = async (msg: UiToMainMessage) => {
 
     case "request-full-export": {
       try {
-        // JPG, batch-uniform scale (see exportNodesForUpload) — not PNG,
-        // not SVG. PNG at 2x looked fine for a simple frame but still hit
-        // Vercel's 4.5MB-per-upload limit on a large, content-heavy page (a
-        // real 413, not theoretical). SVG (tried in between) fixed the
-        // size but was heavy enough to crash Figma outright on that same
-        // kind of page. JPG's lossy compression stays small enough for
-        // this content with no visible quality loss at review size, and is
+        // JPG, per frame (see exportNodeForUpload) — not PNG, not SVG. PNG
+        // at 2x looked fine for a simple frame but still hit Vercel's
+        // 4.5MB-per-upload limit on a large, content-heavy page (a real
+        // 413, not theoretical). SVG (tried in between) fixed the size but
+        // was heavy enough to crash Figma outright on that same kind of
+        // page. JPG's lossy compression stays small enough for this
+        // content with no visible quality loss at review size, and is
         // exactly as stable as PNG (same raster export path, just a
-        // different format). The landing page's CSS caps display width at
-        // the image's own resolution (no upscaling past native size — see
-        // lib/landing-template.js), so 2x is sharp on anything up to a
-        // ~2x-density screen at the frame's native design width.
-        const nodes = msg.nodeIds.map((id) => {
+        // different format).
+        const exports: { id: string; name: string; bytes: number[] }[] = [];
+        for (const id of msg.nodeIds) {
           const node = selectedNodesById.get(id);
           if (!node) {
             throw new Error(
               `A selected frame ("${id}") is no longer available — it may have been deleted or deselected. Re-select your frames and try again.`,
             );
           }
-          return node;
-        });
-        const allBytes = await exportNodesForUpload(nodes);
-        const exports = nodes.map((node, i) => ({
-          id: node.id,
-          name: node.name,
-          bytes: Array.from(allBytes[i]),
-        }));
+          const bytes = await exportNodeForUpload(node);
+          exports.push({ id, name: node.name, bytes: Array.from(bytes) });
+        }
         postToUi({
           type: "full-export-result",
           requestId: msg.requestId,

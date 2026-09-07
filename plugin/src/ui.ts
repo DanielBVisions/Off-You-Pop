@@ -730,6 +730,8 @@ async function handleSend() {
         figmaFrameKey: node.id,
         figmaNodeName: node.name,
         sequenceOrder: i,
+        figmaFrameWidth: node.width,
+        figmaFrameHeight: node.height,
       })),
     };
     const result = await createSignoff(state.settings, payload, exports, (done, total) => {
