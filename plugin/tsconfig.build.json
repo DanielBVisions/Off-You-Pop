@@ -3,7 +3,6 @@
     "target": "ES2017",
     "lib": ["ES2017", "DOM"],
     "module": "commonjs",
-    "moduleResolution": "bundler",
     "esModuleInterop": true,
     "skipLibCheck": true,
     "outDir": "dist/cjs",
