@@ -6,7 +6,8 @@
     "esModuleInterop": true,
     "skipLibCheck": true,
     "outDir": "dist/cjs",
-    "rootDir": "src"
+    "rootDir": "src",
+    "types": ["@figma/plugin-typings"]
   },
   "include": ["src/code.ts", "src/ui.ts", "src/api.ts", "src/types.ts"]
 }
