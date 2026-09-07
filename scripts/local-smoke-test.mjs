@@ -191,12 +191,12 @@ async function main() {
   pass("landing page renders scope + sign button");
 
   // --- 2b. Regression test for the nested-html`` double-escaping bug: a
-  // snapshot's caption (rendered via a nested html`` call inside
+  // snapshot's frame-name tag (rendered via a nested html`` call inside
   // renderSnapshots) must appear as real markup, not as escaped entities
   // sitting visibly in the page body. ---
-  assert.match(landingHtml1, /<div class="caption">Homepage<\/div>/, "snapshot caption renders as real markup, not escaped");
-  assert.doesNotMatch(landingHtml1, /&lt;div class=&quot;caption&quot;/, "snapshot caption is not double-escaped");
-  pass("snapshot caption markup is not double-escaped");
+  assert.match(landingHtml1, /<div class="carousel-frame-tag">Homepage<\/div>/, "snapshot frame tag renders as real markup, not escaped");
+  assert.doesNotMatch(landingHtml1, /&lt;div class=&quot;carousel-frame-tag&quot;/, "snapshot frame tag is not double-escaped");
+  pass("snapshot frame tag markup is not double-escaped");
 
   // --- 3. View event ---
   log("POST view event...");
@@ -314,15 +314,15 @@ async function main() {
   );
   const brandRecipientId = brandCreateBody.landingUrl.split("/").pop();
 
-  // Multi-frame carousel: nav arrows, dots and the "1 / N" counter should
+  // Multi-frame carousel: nav arrows and the "1 / N" counter pill should
   // only appear once there's more than one frame to flick through.
   const brandLandingHtml = await (await fetch(brandCreateBody.landingUrl)).text();
   assert.match(brandLandingHtml, /<div class="carousel-slide is-active" data-index="0">/, "first frame starts active");
   assert.match(brandLandingHtml, /id="carousel-prev"/, "carousel has a prev button for multi-frame sign-offs");
   assert.match(brandLandingHtml, /id="carousel-next"/, "carousel has a next button for multi-frame sign-offs");
-  assert.match(brandLandingHtml, /class="carousel-dot is-active" type="button" data-index="0"/, "first dot starts active");
+  assert.match(brandLandingHtml, /class="carousel-frame-tag">Logo Primary</, "frame name renders as the top-left tag, not escaped");
   assert.match(brandLandingHtml, /1 \/ 2/, "counter shows 1 / 2 for a two-frame sign-off");
-  pass("multi-frame carousel renders nav, dots and counter");
+  pass("multi-frame carousel renders nav + counter pill and frame tag");
 
   const brandSignRes = await fetch(`${base}/api/recipients/${brandRecipientId}/sign`, { method: "POST", body: "{}" });
   const brandSignBody = await brandSignRes.json();
