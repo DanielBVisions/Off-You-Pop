@@ -10,7 +10,7 @@
 // action rather than applying one check to all three.
 
 const { pathSegments, query, readRawBody, sendJson, methodNotAllowed, withErrorHandling } = require("../../../lib/http");
-const { pgSelect, pgUpdate, pgInsert, uploadToStorage } = require("../../../lib/supabase");
+const { pgSelect, pgUpdate, pgInsert, pgDelete, uploadToStorage } = require("../../../lib/supabase");
 const { sendEmail } = require("../../../lib/resend");
 const { signoffCreatedEmail } = require("../../../lib/emails");
 const { requireAuth, requirePluginKey } = require("../../../lib/auth-guard");
@@ -81,6 +81,44 @@ async function handleResend(req, res, id, auth) {
   return sendJson(res, 200, { results });
 }
 
+// --- reset: Admin only, for testing/re-running a sign-off, not for
+// correcting a real client sign-off (the brief's locking rule — "signed is
+// immutable, further changes need a brand-new record" — is about the
+// latter). Puts every recipient back to 'sent' (clearing first_viewed_at/
+// signed_at) and the record back to 'sent', and removes the certificate(s)
+// and branding export this sign-off produced — both are re-created fresh
+// the next time a recipient signs, and both have a unique-per-signoff
+// constraint that a plain re-sign would otherwise violate. The reset
+// itself is still logged (event_type 'reset'), so the audit trail shows
+// it happened even though the prior signed state it undid isn't kept. ---
+async function handleReset(req, res, id, auth) {
+  const record = await pgSelect("signoff_records", [`id=eq.${id}`], { single: true }).catch(() => null);
+  if (!record) return sendJson(res, 404, { error: "Sign-off not found" });
+
+  await pgDelete("certificates", [`signoff_id=eq.${id}`]);
+  if (record.scope_type === "branding") {
+    await pgDelete("branding_exports", [`signoff_id=eq.${id}`]);
+  }
+
+  await pgUpdate("recipients", [`signoff_id=eq.${id}`], {
+    status: "sent",
+    first_viewed_at: null,
+    signed_at: null,
+  });
+
+  const updated = await pgUpdate("signoff_records", [`id=eq.${id}`], { status: "sent" }, { single: true });
+
+  await pgInsert("event_log", {
+    signoff_id: id,
+    recipient_id: null,
+    event_type: "reset",
+    ip_address: null,
+    metadata: { byUser: auth.email, previousStatus: record.status },
+  });
+
+  return sendJson(res, 200, { id, status: updated.status });
+}
+
 // --- snapshot: called by the plugin once per frame, right after create
 // returns. Body is the raw PNG bytes for one frame_snapshots row (given
 // by ?snapshotId=, from create's response) — uploads it to Storage and
@@ -123,5 +161,6 @@ module.exports = withErrorHandling(async (req, res) => {
   if (!auth) return;
   if (action === "archive") return handleArchive(req, res, id, auth);
   if (action === "resend") return handleResend(req, res, id, auth);
+  if (action === "reset") return handleReset(req, res, id, auth);
   return sendJson(res, 404, { error: `Unknown signoff action: ${action}` });
 });

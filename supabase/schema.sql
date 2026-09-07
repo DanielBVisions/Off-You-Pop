@@ -148,7 +148,7 @@ create index if not exists recipients_signoff_idx on recipients (signoff_id);
 create index if not exists recipients_email_idx on recipients (lower(email));
 
 -- ---------------------------------------------------------------------------
--- event_log — append-only. "created" and "resent"/"archived" are
+-- event_log — append-only. "created" and "resent"/"archived"/"reset" are
 -- record-level (recipient_id null); "viewed"/"signed"/"certificate_downloaded"
 -- are per-recipient.
 -- ---------------------------------------------------------------------------
@@ -158,7 +158,7 @@ create table if not exists event_log (
   signoff_id uuid not null references signoff_records (id) on delete cascade,
   recipient_id uuid references recipients (id),
   event_type text not null check (
-    event_type in ('created', 'viewed', 'signed', 'resent', 'archived', 'certificate_downloaded', 'export_triggered')
+    event_type in ('created', 'viewed', 'signed', 'resent', 'archived', 'certificate_downloaded', 'export_triggered', 'reset')
   ),
   occurred_at timestamptz not null default now(),
   ip_address text,
@@ -166,6 +166,16 @@ create table if not exists event_log (
 );
 
 create index if not exists event_log_signoff_idx on event_log (signoff_id, occurred_at);
+
+-- 'reset' was added after this table's first deploy — re-running this
+-- script against an already-created database needs the constraint itself
+-- widened, not just the `create table if not exists` above (which no-ops
+-- once the table exists). Constraint name is Postgres's own default for an
+-- inline column check (table_column_check).
+alter table event_log drop constraint if exists event_log_event_type_check;
+alter table event_log add constraint event_log_event_type_check check (
+  event_type in ('created', 'viewed', 'signed', 'resent', 'archived', 'certificate_downloaded', 'export_triggered', 'reset')
+);
 
 -- Append-only: block updates and deletes so the audit trail can't be
 -- quietly edited after the fact.

@@ -276,6 +276,14 @@ async function main() {
   assert.match(detailHtml, /jo@acme\.com/);
   pass("detail page shows full audit trail + recipient");
 
+  // Regression check for the exact bug reported live: the recipient row's
+  // certificate link (built via a nested html`` call not wrapped in raw())
+  // rendered as visible literal tag text next to the status pill instead
+  // of an actual link.
+  assert.match(detailHtml, /<a class="btn btn-secondary"[^>]*>Certificate<\/a>/, "certificate link renders as a real link, not escaped tag text");
+  assert.doesNotMatch(detailHtml, /&lt;a class=&quot;btn/, "certificate link markup is not double-escaped");
+  pass("dashboard recipient certificate link is not double-escaped");
+
   // --- 12. Archive (admin action) ---
   const archiveRes = await fetch(`${base}/api/signoffs/${createBody.id}/archive`, { method: "POST", headers: { Cookie: cookie } });
   assert.strictEqual(archiveRes.status, 200);
@@ -335,6 +343,29 @@ async function main() {
   const guidelinesBytes = Buffer.from(await guidelinesRes.arrayBuffer());
   assert.strictEqual(guidelinesBytes.subarray(0, 5).toString("latin1"), "%PDF-");
   pass("brand guidelines PDF is valid");
+
+  // --- 14. Reset (testing helper): puts a signed record back to unsigned
+  // so it can be re-signed — for QA re-runs, not for correcting a real
+  // client sign-off. The certificate/branding-export rows it deletes carry
+  // real unique constraints (one certificate per recipient, one export per
+  // sign-off), so if the delete didn't actually happen, re-signing would
+  // 500 on a duplicate key rather than succeed. ---
+  log("Reset a signed branding sign-off and re-sign it...");
+  const resetRes = await fetch(`${base}/api/signoffs/${brandCreateBody.id}/reset`, { method: "POST", headers: { Cookie: cookie } });
+  const resetBody = await resetRes.json();
+  assert.strictEqual(resetRes.status, 200, `reset status 200, got ${JSON.stringify(resetBody)}`);
+  assert.strictEqual(resetBody.status, "sent", "record status back to 'sent' after reset");
+  pass("reset returns record to 'sent'");
+
+  const brandSignAgainRes = await fetch(`${base}/api/recipients/${brandRecipientId}/sign`, { method: "POST", body: "{}" });
+  const brandSignAgainBody = await brandSignAgainRes.json();
+  assert.strictEqual(brandSignAgainRes.status, 200, `re-sign after reset status 200, got ${JSON.stringify(brandSignAgainBody)}`);
+  assert.strictEqual(brandSignAgainBody.brandingExport.status, "complete", "branding export re-triggers on the post-reset sign");
+  pass("re-signing after reset succeeds (old certificate/export were actually cleared, not left dangling)");
+
+  const brandDetailHtml = await (await fetch(`${base}/dashboard/${brandCreateBody.id}`, { headers: { Cookie: cookie } })).text();
+  assert.match(brandDetailHtml, />reset</, "audit trail includes the 'reset' event");
+  pass("reset is recorded in the audit trail");
 
   console.log("\n\x1b[32mAll smoke-test steps passed.\x1b[0m");
   process.exit(0);

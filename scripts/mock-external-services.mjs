@@ -200,6 +200,18 @@ function handleUpdate(table, url, patch) {
   }
 }
 
+function handleDelete(table, url) {
+  const { where, params } = buildWhereAndOrder(url.searchParams);
+  if (!where) return { status: 400, body: { message: "refusing an unfiltered DELETE" } };
+  const sql = `WITH del AS (DELETE FROM ${sqlTable(table)}${where} RETURNING *) SELECT coalesce(json_agg(row_to_json(del)), '[]'::json) FROM del;`;
+  try {
+    const rows = psqlJson(sql, params);
+    return { status: 200, body: rows };
+  } catch (err) {
+    return { status: 400, body: { message: err.message } };
+  }
+}
+
 // --- HTTP server -------------------------------------------------------------
 
 function readBody(req) {
@@ -274,6 +286,10 @@ const server = createServer(async (req, res) => {
       if (req.method === "PATCH") {
         const body = JSON.parse((await readBody(req)).toString("utf8") || "{}");
         const result = handleUpdate(table, url, body);
+        return send(result.status, result.body);
+      }
+      if (req.method === "DELETE") {
+        const result = handleDelete(table, url);
         return send(result.status, result.body);
       }
     }
