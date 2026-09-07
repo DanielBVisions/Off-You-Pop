@@ -1,0 +1,13 @@
+{
+  "compilerOptions": {
+    "target": "ES2017",
+    "lib": ["ES2017", "DOM"],
+    "module": "commonjs",
+    "moduleResolution": "bundler",
+    "esModuleInterop": true,
+    "skipLibCheck": true,
+    "outDir": "dist/cjs",
+    "rootDir": "src"
+  },
+  "include": ["src/code.ts", "src/ui.ts", "src/api.ts", "src/types.ts", "src/figma-plugin-api.d.ts"]
+}

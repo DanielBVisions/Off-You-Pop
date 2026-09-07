@@ -25,32 +25,15 @@ mkdirSync(cjsDir, { recursive: true });
 
 function tsc() {
   console.log("[build] tsc -> dist/cjs");
-  execFileSync(
-    "tsc",
-    [
-      "--ignoreConfig",
-      "--module",
-      "commonjs",
-      "--target",
-      "es2017",
-      "--lib",
-      "ES2017,DOM",
-      "--moduleResolution",
-      "bundler",
-      "--esModuleInterop",
-      "--skipLibCheck",
-      "--outDir",
-      cjsDir,
-      "--rootDir",
-      path.join(root, "src"),
-      path.join(root, "src/code.ts"),
-      path.join(root, "src/ui.ts"),
-      path.join(root, "src/api.ts"),
-      path.join(root, "src/types.ts"),
-      path.join(root, "src/figma-plugin-api.d.ts"),
-    ],
-    { stdio: "inherit", cwd: root },
-  );
+  // Compiler options live in tsconfig.build.json (a separate config from
+  // tsconfig.json, which is noEmit:true and only used for `npm run
+  // typecheck`) and are passed via --project, not a pile of CLI flags —
+  // passing explicit source files alongside a bare `tsc` invocation
+  // conflicts with an ambient tsconfig.json (TS5112) on some TypeScript
+  // versions, and the escape hatch for that (--ignoreConfig) doesn't exist
+  // on others; --project sidesteps the conflict entirely rather than
+  // depending on either behavior.
+  execFileSync("tsc", ["--project", path.join(root, "tsconfig.build.json")], { stdio: "inherit", cwd: root });
 }
 
 function read(name) {
