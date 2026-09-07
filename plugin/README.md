@@ -1,10 +1,11 @@
 # Off You Pop — Figma plugin
 
 The Figma-side half of the sign-off tool: collects client/project details,
-lets the designer pick which frames are in scope, exports each frame as a
-JPEG snapshot (falling back to a lower resolution automatically if a
-particular frame would otherwise be too large to upload), and sends
-everything to the backend to create a `SignoffRecord`.
+lets the designer pick which frames are in scope, exports every frame as a
+JPEG snapshot at a shared resolution (automatically dropping to a lower
+one, uniformly across the whole batch, only if the heaviest frame would
+otherwise be too large to upload), and sends everything to the backend to
+create a `SignoffRecord`.
 
 This is **only** the plugin. There is no backend yet — see
 [`../docs/api-contract.md`](../docs/api-contract.md) for the API it's built
