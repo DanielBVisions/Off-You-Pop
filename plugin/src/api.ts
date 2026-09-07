@@ -90,11 +90,11 @@ export async function createSignoff(
 
   for (let i = 0; i < bySequence.length; i++) {
     const image = images[i];
-    const blob = new Blob([new Uint8Array(image.bytes)], { type: "image/png" });
+    const blob = new Blob([new Uint8Array(image.bytes)], { type: "image/jpeg" });
     const uploadUrl = resolveUrl(settings.apiBaseUrl, `/api/signoffs/${id}/snapshot?snapshotId=${bySequence[i].id}`);
     const uploadRes = await fetch(uploadUrl, {
       method: "POST",
-      headers: { "Content-Type": "image/png", ...authHeaders(settings) },
+      headers: { "Content-Type": "image/jpeg", ...authHeaders(settings) },
       body: blob,
     });
     if (!uploadRes.ok) {

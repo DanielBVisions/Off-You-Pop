@@ -132,11 +132,12 @@ function extensionForContentType(contentType) {
 // --- snapshot: called by the plugin once per frame, right after create
 // returns. Body is the raw image bytes for one frame_snapshots row (given
 // by ?snapshotId=, from create's response) — the plugin currently sends
-// PNG, but this endpoint doesn't assume a format, it uploads whatever
-// Content-Type is actually sent (an SVG export was tried and reverted —
-// too heavy for Figma to reliably export on a large frame — but nothing
-// here needs to change if that's revisited). Fills in that row's
-// snapshot_url, which starts empty at creation. ---
+// JPEG (PNG could still exceed this request's body-size limit on a large
+// page even after being split per-frame; an SVG export was also tried and
+// reverted, too heavy for Figma to reliably produce on a large frame), but
+// this endpoint doesn't assume a format — it uploads whatever Content-Type
+// is actually sent. Fills in that row's snapshot_url, which starts empty
+// at creation. ---
 async function handleSnapshot(req, res, id) {
   const snapshotId = query(req).get("snapshotId");
   if (!snapshotId) return sendJson(res, 400, { error: "snapshotId query param is required" });
