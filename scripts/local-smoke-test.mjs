@@ -190,13 +190,16 @@ async function main() {
   assert.match(landingHtml1, /Sign off/);
   pass("landing page renders scope + sign button");
 
-  // --- 2b. Regression test for the nested-html`` double-escaping bug: a
-  // snapshot's frame-name tag (rendered via a nested html`` call inside
-  // renderSnapshots) must appear as real markup, not as escaped entities
-  // sitting visibly in the page body. ---
-  assert.match(landingHtml1, /<div class="carousel-frame-tag">Homepage<\/div>/, "snapshot frame tag renders as real markup, not escaped");
-  assert.doesNotMatch(landingHtml1, /&lt;div class=&quot;carousel-frame-tag&quot;/, "snapshot frame tag is not double-escaped");
-  pass("snapshot frame tag markup is not double-escaped");
+  // --- 2b. Regression test for the nested-html`` double-escaping bug: the
+  // sign-off confirmation modal (rendered via a nested html`` call inside
+  // renderSignForm) must appear as real markup, not as escaped entities
+  // sitting visibly in the page body. Also checks the stage chip (the
+  // project-info overlay that replaced the old light-colored header block
+  // above the carousel) renders correctly. ---
+  assert.match(landingHtml1, /<h2>Confirm sign-off<\/h2>/, "sign-off modal renders as real markup, not escaped");
+  assert.doesNotMatch(landingHtml1, /&lt;h2&gt;Confirm sign-off/, "sign-off modal is not double-escaped");
+  assert.match(landingHtml1, /<span class="stage-chip-title">Acme Website Redesign<\/span>/, "stage chip shows the project name");
+  pass("nested modal markup is not double-escaped, and the stage chip renders correctly");
 
   // --- 3. View event ---
   log("POST view event...");
@@ -314,15 +317,14 @@ async function main() {
   );
   const brandRecipientId = brandCreateBody.landingUrl.split("/").pop();
 
-  // Multi-frame carousel: nav arrows and the "1 / N" counter pill should
-  // only appear once there's more than one frame to flick through.
+  // Multi-frame carousel: nav arrows and the "name · 1 / N" counter pill
+  // should only appear once there's more than one frame to flick through.
   const brandLandingHtml = await (await fetch(brandCreateBody.landingUrl)).text();
   assert.match(brandLandingHtml, /<div class="carousel-slide is-active" data-index="0">/, "first frame starts active");
   assert.match(brandLandingHtml, /id="carousel-prev"/, "carousel has a prev button for multi-frame sign-offs");
   assert.match(brandLandingHtml, /id="carousel-next"/, "carousel has a next button for multi-frame sign-offs");
-  assert.match(brandLandingHtml, /class="carousel-frame-tag">Logo Primary</, "frame name renders as the top-left tag, not escaped");
-  assert.match(brandLandingHtml, /1 \/ 2/, "counter shows 1 / 2 for a two-frame sign-off");
-  pass("multi-frame carousel renders nav + counter pill and frame tag");
+  assert.match(brandLandingHtml, /Logo Primary · 1 \/ 2/, "counter pill shows the first frame's name alongside 1 / 2");
+  pass("multi-frame carousel renders nav + name-and-counter pill");
 
   const brandSignRes = await fetch(`${base}/api/recipients/${brandRecipientId}/sign`, { method: "POST", body: "{}" });
   const brandSignBody = await brandSignRes.json();
