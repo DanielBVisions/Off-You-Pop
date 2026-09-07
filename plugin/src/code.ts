@@ -112,6 +112,11 @@ figma.ui.onmessage = async (msg: UiToMainMessage) => {
 
     case "request-full-export": {
       try {
+        // 1x, not 2x: these are viewed on screen (landing page, dashboard,
+        // certificate reference), not printed — 2x roughly doubled export
+        // time and upload size per frame for no real benefit, and was part
+        // of what made multi-frame sign-offs slow even after fixing the
+        // request-size limit itself.
         const exports: { id: string; name: string; bytes: number[] }[] = [];
         for (const id of msg.nodeIds) {
           const node = selectedNodesById.get(id);
@@ -120,7 +125,7 @@ figma.ui.onmessage = async (msg: UiToMainMessage) => {
               `A selected frame ("${id}") is no longer available — it may have been deleted or deselected. Re-select your frames and try again.`,
             );
           }
-          const bytes = await exportNodePng(node, 2);
+          const bytes = await exportNodePng(node, 1);
           exports.push({ id, name: node.name, bytes: Array.from(bytes) });
         }
         postToUi({
