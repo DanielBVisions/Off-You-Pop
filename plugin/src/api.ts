@@ -45,43 +45,65 @@ export async function searchContacts(
   );
 }
 
+async function parseErrorBody(res: Response, fallback: string): Promise<string> {
+  try {
+    const body = await res.json();
+    if (body?.error) return body.error;
+  } catch {
+    // Non-JSON error body — keep the fallback.
+  }
+  return fallback;
+}
+
+/**
+ * Two-step create: a JSON-only POST (no images) followed by one raw-bytes
+ * upload per frame. Not a stylistic choice — a single request carrying
+ * every frame's image data routinely exceeded Vercel's hard 4.5MB
+ * request-body limit for serverless functions on real multi-frame
+ * sign-offs (a real 413 in production, not a theoretical concern). Each
+ * upload here is bounded by one image's size instead of the sum of all
+ * of them. See docs/api-contract.md's "Two-step create" note.
+ */
 export async function createSignoff(
   settings: PluginSettings,
   payload: CreateSignoffPayload,
   images: { id: string; name: string; bytes: number[] }[],
+  onProgress?: (done: number, total: number) => void,
 ): Promise<CreateSignoffResponse> {
   if (!settings.apiBaseUrl.trim()) {
     throw new ApiError("Set the backend URL in Settings first.");
   }
 
-  const url = resolveUrl(settings.apiBaseUrl, "/api/signoffs");
-  const form = new FormData();
-  form.append("data", JSON.stringify(payload));
-  images.forEach((img, i) => {
-    const blob = new Blob([new Uint8Array(img.bytes)], { type: "image/png" });
-    form.append(`snapshot_${i}`, blob, `${img.name || "frame"}.png`);
-  });
-
-  const res = await fetch(url, {
+  const createRes = await fetch(resolveUrl(settings.apiBaseUrl, "/api/signoffs"), {
     method: "POST",
-    headers: authHeaders(settings),
-    body: form,
+    headers: { "Content-Type": "application/json", ...authHeaders(settings) },
+    body: JSON.stringify(payload),
   });
+  if (!createRes.ok) {
+    throw new ApiError(await parseErrorBody(createRes, `The backend rejected this sign-off (${createRes.status}).`));
+  }
+  const createBody = await createRes.json();
+  const id = createBody.id as string;
+  const landingUrl = (createBody.landingUrl ?? createBody.landing_url) as string;
+  const snapshots = (createBody.snapshots ?? []) as { id: string; sequenceOrder: number }[];
+  const bySequence = snapshots.slice().sort((a, b) => a.sequenceOrder - b.sequenceOrder);
 
-  if (!res.ok) {
-    let message = `The backend rejected this sign-off (${res.status}).`;
-    try {
-      const body = await res.json();
-      if (body?.error) message = body.error;
-    } catch {
-      // Non-JSON error body — keep the generic message.
+  for (let i = 0; i < bySequence.length; i++) {
+    const image = images[i];
+    const blob = new Blob([new Uint8Array(image.bytes)], { type: "image/png" });
+    const uploadUrl = resolveUrl(settings.apiBaseUrl, `/api/signoffs/${id}/snapshot?snapshotId=${bySequence[i].id}`);
+    const uploadRes = await fetch(uploadUrl, {
+      method: "POST",
+      headers: { "Content-Type": "image/png", ...authHeaders(settings) },
+      body: blob,
+    });
+    if (!uploadRes.ok) {
+      throw new ApiError(
+        await parseErrorBody(uploadRes, `Failed uploading frame ${i + 1} of ${bySequence.length} (${uploadRes.status}).`),
+      );
     }
-    throw new ApiError(message);
+    onProgress?.(i + 1, bySequence.length);
   }
 
-  const body = await res.json();
-  return {
-    id: body.id,
-    landingUrl: body.landingUrl ?? body.landing_url,
-  };
+  return { id, landingUrl };
 }

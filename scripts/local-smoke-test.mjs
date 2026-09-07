@@ -108,12 +108,37 @@ async function main() {
     "base64",
   );
 
+  // Mirrors the plugin's two-step flow (see api/signoffs/index.js's header
+  // comment): JSON-only create, then one raw-bytes upload per frame,
+  // targeting the snapshot row ids the create response hands back.
+  async function createSignoffTwoStep(payload, images) {
+    const createRes = await fetch(`${base}/api/signoffs`, {
+      method: "POST",
+      headers: { "Content-Type": "application/json" },
+      body: JSON.stringify(payload),
+    });
+    const createBody = await createRes.json();
+    assert.strictEqual(createRes.status, 201, `create status 201, got ${createRes.status}: ${JSON.stringify(createBody)}`);
+    assert.ok(createBody.id && createBody.landingUrl, "response has id + landingUrl");
+    assert.strictEqual(createBody.snapshots.length, images.length, "response returns one snapshot row per image");
+
+    const bySequence = createBody.snapshots.slice().sort((a, b) => a.sequenceOrder - b.sequenceOrder);
+    for (let i = 0; i < bySequence.length; i++) {
+      const uploadRes = await fetch(`${base}/api/signoffs/${createBody.id}/snapshot?snapshotId=${bySequence[i].id}`, {
+        method: "POST",
+        headers: { "Content-Type": "image/png" },
+        body: images[i],
+      });
+      const uploadBody = await uploadRes.json();
+      assert.strictEqual(uploadRes.status, 200, `snapshot upload ${i} status 200, got ${JSON.stringify(uploadBody)}`);
+    }
+    return createBody;
+  }
+
   // --- 1. Create a single_frame sign-off (plugin flow) ---
-  log("POST /api/signoffs (create)...");
-  const form = new FormData();
-  form.append(
-    "data",
-    JSON.stringify({
+  log("POST /api/signoffs (create) + snapshot upload...");
+  const createBody = await createSignoffTwoStep(
+    {
       clientName: "Acme Ltd",
       projectName: "Acme Website Redesign",
       figmaFileKey: null,
@@ -125,13 +150,9 @@ async function main() {
       createdBy: "Dan",
       recipients: [{ name: "Jo Client", email: "jo@acme.com", contactId: null }],
       snapshots: [{ figmaFrameKey: "1:23", figmaNodeName: "Homepage", sequenceOrder: 0 }],
-    }),
+    },
+    [onePxPng],
   );
-  form.append("snapshot_0", new Blob([onePxPng], { type: "image/png" }), "homepage.png");
-  const createRes = await fetch(`${base}/api/signoffs`, { method: "POST", body: form });
-  const createBody = await createRes.json();
-  assert.strictEqual(createRes.status, 201, `create status 201, got ${createRes.status}: ${JSON.stringify(createBody)}`);
-  assert.ok(createBody.id && createBody.landingUrl, "response has id + landingUrl");
   pass(`created ${createBody.id}`);
 
   const recipientId = createBody.landingUrl.split("/").pop();
@@ -231,11 +252,9 @@ async function main() {
   pass("archive works, record hidden from default dashboard list");
 
   // --- 13. Branding scope end-to-end (export triggered by sign only) ---
-  log("Branding scope: create -> sign -> export...");
-  const brandingForm = new FormData();
-  brandingForm.append(
-    "data",
-    JSON.stringify({
+  log("Branding scope: create -> upload -> sign -> export...");
+  const brandCreateBody = await createSignoffTwoStep(
+    {
       clientName: "Acme Ltd",
       projectName: "Acme Rebrand",
       figmaFileKey: "mockfile123",
@@ -250,13 +269,9 @@ async function main() {
         { figmaFrameKey: "10:1", figmaNodeName: "Logo Primary", sequenceOrder: 0 },
         { figmaFrameKey: "10:2", figmaNodeName: "Logo Mono", sequenceOrder: 1 },
       ],
-    }),
+    },
+    [onePxPng, onePxPng],
   );
-  brandingForm.append("snapshot_0", new Blob([onePxPng], { type: "image/png" }), "logo-primary.png");
-  brandingForm.append("snapshot_1", new Blob([onePxPng], { type: "image/png" }), "logo-mono.png");
-  const brandCreateRes = await fetch(`${base}/api/signoffs`, { method: "POST", body: brandingForm });
-  const brandCreateBody = await brandCreateRes.json();
-  assert.strictEqual(brandCreateRes.status, 201, JSON.stringify(brandCreateBody));
   const brandRecipientId = brandCreateBody.landingUrl.split("/").pop();
 
   const brandSignRes = await fetch(`${base}/api/recipients/${brandRecipientId}/sign`, { method: "POST", body: "{}" });

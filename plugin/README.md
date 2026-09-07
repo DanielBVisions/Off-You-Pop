@@ -86,7 +86,10 @@ plugin/
   dashboard grouping only — sequencing isn't enforced, per team
   decision), optional notes.
 - On send: exports each in-scope frame as a PNG (2x) via the Plugin API,
-  and POSTs everything as `multipart/form-data` to `POST /api/signoffs`.
+  then creates the record (JSON only) and uploads each frame's image with
+  its own request afterward — see `../docs/api-contract.md`'s "Two-step
+  create" note for why (a combined-images request routinely exceeded
+  Vercel's 4.5MB body limit on real multi-frame sign-offs).
 - Settings panel for the backend URL, an optional API key, and the
   sender's name (defaults to the Figma account name, editable).
 

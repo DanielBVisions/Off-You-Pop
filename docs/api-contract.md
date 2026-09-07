@@ -12,19 +12,32 @@ Until it's set, the plugin disables sending.
 
 ---
 
+## Two-step create — why
+
+Creating a sign-off is **not** one call. It was originally designed as a
+single `multipart/form-data` POST carrying the JSON metadata plus every
+exported frame image together — that held up fine in testing with one or
+two frames, then broke in real use: a 10-frame sign-off's combined image
+payload routinely exceeded **4.5MB**, Vercel's hard request-body limit for
+serverless functions (platform-enforced, not a config value — not raisable
+on any plan). The failure mode was ugly too: the plugin just looked like
+it hung or reset, no clear error, since a 413 at the platform layer
+doesn't reliably reach application error handling the way a normal HTTP
+response does.
+
+The fix: `POST /api/signoffs` now carries **no image bytes at all** — just
+JSON metadata — and returns a `FrameSnapshot` row (empty `snapshot_url`)
+per frame. The plugin then makes one follow-up request **per frame**,
+each bounded by that single image's size instead of the sum of all of
+them, regardless of how many frames are in scope.
+
 ## `POST /api/signoffs`
 
-Creates a `SignoffRecord`, its `Recipient` rows, and its `FrameSnapshot`
-rows in one call, uploading the exported frame images at the same time.
+Creates a `SignoffRecord`, its `Recipient` rows, and one `FrameSnapshot`
+row per entry in `snapshots` — with `snapshot_url` left empty, to be
+filled in by the follow-up upload calls below.
 
-**Request:** `multipart/form-data`
-
-| Field | Type | Notes |
-|---|---|---|
-| `data` | JSON string (see below) | All non-file fields |
-| `snapshot_0`, `snapshot_1`, … | file (PNG) | One per entry in `data.snapshots`, indexed positionally — `snapshot_N` corresponds to `data.snapshots[N]` |
-
-`data` JSON shape:
+**Request:** `application/json`
 
 ```jsonc
 {
@@ -51,8 +64,9 @@ rows in one call, uploading the exported frame images at the same time.
   ≥1 recipient with name+email, a scope type, ≥1 snapshot) — the plugin
   validates client-side, but per the brief this must not be trusted alone.
 - Generate the `SignoffRecord.id` (UUID) and the landing page URL.
-- Store each uploaded PNG in Supabase Storage and create the matching
-  `FrameSnapshot` row (`snapshot_url`, `sequence_order`).
+- Create one `FrameSnapshot` row per `snapshots[]` entry with
+  `snapshot_url = ''` (upload comes later — see below) and the given
+  `figma_frame_key`/`figma_node_name`/`sequence_order`.
 - For each recipient: upsert a `Contact` (by email, scoped to the team)
   with the given name/email/clientName and `last_used_at = now()`, but
   store the `Recipient` row with its own **copied** name/email — never a
@@ -70,11 +84,48 @@ rows in one call, uploading the exported frame images at the same time.
 **Response:** `201 Created`
 
 ```json
-{ "id": "b3c1...", "landingUrl": "https://off-you-pop.vercel.app/s/b3c1..." }
+{
+  "id": "b3c1...",
+  "landingUrl": "https://off-you-pop.vercel.app/s/b3c1...",
+  "snapshots": [{ "id": "f1a2...", "sequenceOrder": 0 }]
+}
 ```
+
+`snapshots[]` gives the plugin the row id to target for each frame's
+upload, matched by `sequenceOrder` (not array position — sort by it
+before zipping against the images you're about to upload).
 
 **Errors:** `400` with `{ "error": "..." }` for validation failures —
 plugin surfaces `error` verbatim to the user.
+
+---
+
+## `POST /api/signoffs/:id/snapshot?snapshotId=<uuid>`
+
+Uploads one frame's image, immediately after `POST /api/signoffs`
+returns — call this once per entry in that response's `snapshots[]`.
+
+**Request:** raw bytes, `Content-Type: image/png` — no JSON envelope, no
+multipart. `snapshotId` (query param) is the `FrameSnapshot.id` this
+upload is for, from the create response.
+
+**Server responsibilities:** upload the bytes to Supabase Storage, then
+set that `FrameSnapshot` row's `snapshot_url`. 404s if `snapshotId` doesn't
+belong to `:id`.
+
+**Response:** `200 OK`
+
+```json
+{ "id": "f1a2...", "snapshotUrl": "https://.../storage/v1/object/public/snapshots/..." }
+```
+
+Until every frame's upload has completed, the landing page shows those
+positions with no image — send these sequentially (or with the plugin's
+own care about concurrency) right after create returns, and treat a
+failed upload as a failed send overall (the record and recipients already
+exist at that point, but an incomplete sign-off shouldn't be presented as
+done — surface the error rather than silently finishing without every
+frame uploaded).
 
 ---
 

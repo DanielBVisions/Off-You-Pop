@@ -1,13 +1,19 @@
-// POST /api/signoffs/:id/archive and POST /api/signoffs/:id/resend —
-// merged into one function file (see api/auth/[action].js for why). URLs
-// and behavior are unchanged from when these were
-// api/signoffs/[id]/archive.js and api/signoffs/[id]/resend.js.
+// POST /api/signoffs/:id/archive, POST /api/signoffs/:id/resend, and
+// POST /api/signoffs/:id/snapshot — merged into one function file (see
+// api/auth/[action].js for why). archive/resend are unchanged from when
+// they were separate files; snapshot is new (see api/signoffs/index.js's
+// header comment — uploads one frame image at a time instead of all of
+// them in the original create request, to stay under Vercel's 4.5MB
+// request-body limit). archive/resend need dashboard admin auth; snapshot
+// needs the plugin's auth instead (same as create) — genuinely different
+// trust boundaries, so the dispatcher below picks the right check per
+// action rather than applying one check to all three.
 
-const { pathSegments, sendJson, methodNotAllowed, withErrorHandling, query } = require("../../../lib/http");
-const { pgSelect, pgUpdate, pgInsert } = require("../../../lib/supabase");
+const { pathSegments, query, readRawBody, sendJson, methodNotAllowed, withErrorHandling } = require("../../../lib/http");
+const { pgSelect, pgUpdate, pgInsert, uploadToStorage } = require("../../../lib/supabase");
 const { sendEmail } = require("../../../lib/resend");
 const { signoffCreatedEmail } = require("../../../lib/emails");
-const { requireAuth } = require("../../../lib/auth-guard");
+const { requireAuth, requirePluginKey } = require("../../../lib/auth-guard");
 
 function siteUrl() {
   return (process.env.SITE_URL || "http://localhost:3000").replace(/\/+$/, "");
@@ -75,14 +81,46 @@ async function handleResend(req, res, id, auth) {
   return sendJson(res, 200, { results });
 }
 
+// --- snapshot: called by the plugin once per frame, right after create
+// returns. Body is the raw PNG bytes for one frame_snapshots row (given
+// by ?snapshotId=, from create's response) — uploads it to Storage and
+// fills in that row's snapshot_url, which starts empty at creation. ---
+async function handleSnapshot(req, res, id) {
+  const snapshotId = query(req).get("snapshotId");
+  if (!snapshotId) return sendJson(res, 400, { error: "snapshotId query param is required" });
+
+  const bytes = await readRawBody(req);
+  if (bytes.length === 0) return sendJson(res, 400, { error: "Empty request body — expected PNG image bytes" });
+
+  const contentType = req.headers["content-type"] || "image/png";
+  const path = `${id}/${snapshotId}.png`;
+  const url = await uploadToStorage("snapshots", path, bytes, contentType);
+
+  const updated = await pgUpdate(
+    "frame_snapshots",
+    [`id=eq.${snapshotId}`, `signoff_id=eq.${id}`],
+    { snapshot_url: url },
+    { single: true },
+  );
+  if (!updated) return sendJson(res, 404, { error: "Snapshot row not found for this sign-off" });
+
+  return sendJson(res, 200, { id: updated.id, snapshotUrl: url });
+}
+
 module.exports = withErrorHandling(async (req, res) => {
   if (req.method !== "POST") return methodNotAllowed(res, ["POST"]);
-  const auth = await requireAuth(req, res, { role: "admin" });
-  if (!auth) return;
 
   const segments = pathSegments(req); // ['api','signoffs', id, action]
   const id = segments[2];
   const action = segments[3];
+
+  if (action === "snapshot") {
+    if (!requirePluginKey(req, res)) return;
+    return handleSnapshot(req, res, id);
+  }
+
+  const auth = await requireAuth(req, res, { role: "admin" });
+  if (!auth) return;
   if (action === "archive") return handleArchive(req, res, id, auth);
   if (action === "resend") return handleResend(req, res, id, auth);
   return sendJson(res, 404, { error: `Unknown signoff action: ${action}` });

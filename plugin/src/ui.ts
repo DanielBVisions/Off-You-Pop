@@ -732,7 +732,10 @@ async function handleSend() {
         sequenceOrder: i,
       })),
     };
-    const result = await createSignoff(state.settings, payload, exports);
+    const result = await createSignoff(state.settings, payload, exports, (done, total) => {
+      const btn = document.getElementById("send-btn") as HTMLButtonElement | null;
+      if (btn) btn.textContent = `Uploading frame ${done} of ${total}…`;
+    });
     state.successUrl = result.landingUrl;
     state.view = "success";
     renderBody();

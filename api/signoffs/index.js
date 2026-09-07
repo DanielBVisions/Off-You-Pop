@@ -1,13 +1,17 @@
-// POST /api/signoffs — create a record (called by the plugin, matches
-// docs/api-contract.md exactly: multipart/form-data with a "data" JSON
-// field and snapshot_0..N image files).
+// POST /api/signoffs — create a record (called by the plugin). Plain JSON
+// only — see docs/api-contract.md's "Two-step create" note for why: a
+// multi-frame sign-off's combined image payload routinely blew past
+// Vercel's hard 4.5MB request-body limit for serverless functions (a real
+// 413 in production, not a theoretical concern). Snapshot images are
+// uploaded one at a time afterwards via the "snapshot" action on
+// api/signoffs/[id]/[action].js, each request bounded by a single image's
+// size instead of the sum of all of them.
 // GET  /api/signoffs — list records for the dashboard (status/client/search
 // filters, archived excluded unless ?includeArchived=1).
 
-const { readRawBody, parseMultipart, query, sendJson, methodNotAllowed, withErrorHandling } = require("../../lib/http");
+const { readJsonBody, query, sendJson, methodNotAllowed, withErrorHandling } = require("../../lib/http");
 const { pgInsert, pgUpsert, pgSelect } = require("../../lib/supabase");
 const { validateCreateSignoff } = require("../../lib/validate");
-const { uploadToStorage } = require("../../lib/supabase");
 const { sendEmail } = require("../../lib/resend");
 const { signoffCreatedEmail } = require("../../lib/emails");
 const { requirePluginKey, requireAuthOrPluginKey } = require("../../lib/auth-guard");
@@ -19,21 +23,9 @@ function siteUrl() {
 async function handleCreate(req, res) {
   if (!requirePluginKey(req, res)) return;
 
-  const contentType = req.headers["content-type"] || "";
-  if (!contentType.startsWith("multipart/form-data")) {
-    return sendJson(res, 400, { error: "Expected multipart/form-data" });
-  }
-  const raw = await readRawBody(req);
-  const { fields, files } = parseMultipart(raw, contentType);
+  const data = await readJsonBody(req);
 
-  let data;
-  try {
-    data = JSON.parse(fields.data || "{}");
-  } catch {
-    return sendJson(res, 400, { error: "Invalid JSON in 'data' field" });
-  }
-
-  const errors = validateCreateSignoff(data, files.length);
+  const errors = validateCreateSignoff(data);
   if (errors.length > 0) {
     return sendJson(res, 400, { error: errors.join("; ") });
   }
@@ -55,25 +47,21 @@ async function handleCreate(req, res) {
     { single: true },
   );
 
-  // 2. Upload snapshots in scope order, matching data.snapshots[i] <-> files snapshot_i.
-  const snapshotRows = [];
-  for (let i = 0; i < data.snapshots.length; i++) {
-    const meta = data.snapshots[i];
-    const file = files.find((f) => f.field === `snapshot_${i}`);
-    if (!file) {
-      return sendJson(res, 400, { error: `Missing uploaded image for snapshot_${i}` });
-    }
-    const path = `${record.id}/${i}-${Date.now()}.png`;
-    const url = await uploadToStorage("snapshots", path, file.data, file.contentType || "image/png");
-    snapshotRows.push({
-      signoff_id: record.id,
-      figma_frame_key: meta.figmaFrameKey,
-      figma_node_name: meta.figmaNodeName || "",
-      snapshot_url: url,
-      sequence_order: meta.sequenceOrder ?? i,
-    });
-  }
-  await pgInsert("frame_snapshots", snapshotRows);
+  // 2. Create a placeholder FrameSnapshot row per frame in scope order —
+  // snapshot_url starts empty and is filled in by the follow-up per-image
+  // upload calls the plugin makes right after this request returns.
+  const snapshotRows = data.snapshots.map((meta, i) => ({
+    signoff_id: record.id,
+    figma_frame_key: meta.figmaFrameKey,
+    figma_node_name: meta.figmaNodeName || "",
+    snapshot_url: "",
+    sequence_order: meta.sequenceOrder ?? i,
+  }));
+  const insertedSnapshots = await pgInsert("frame_snapshots", snapshotRows);
+  const snapshots = insertedSnapshots
+    .slice()
+    .sort((a, b) => a.sequence_order - b.sequence_order)
+    .map((s) => ({ id: s.id, sequenceOrder: s.sequence_order }));
 
   // 3. Upsert each recipient's Contact, then create the Recipient rows
   // (copying name/email now — see lib/supabase.js pgUpsert note in
@@ -132,6 +120,7 @@ async function handleCreate(req, res) {
   return sendJson(res, 201, {
     id: record.id,
     landingUrl: `${siteUrl()}/s/${recipientList[0].id}`,
+    snapshots,
   });
 }
 
