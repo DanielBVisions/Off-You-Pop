@@ -190,6 +190,14 @@ async function main() {
   assert.match(landingHtml1, /Sign off/);
   pass("landing page renders scope + sign button");
 
+  // --- 2b. Regression test for the nested-html`` double-escaping bug: a
+  // snapshot's caption (rendered via a nested html`` call inside
+  // renderSnapshots) must appear as real markup, not as escaped entities
+  // sitting visibly in the page body. ---
+  assert.match(landingHtml1, /<div class="caption">Homepage<\/div>/, "snapshot caption renders as real markup, not escaped");
+  assert.doesNotMatch(landingHtml1, /&lt;div class=&quot;caption&quot;/, "snapshot caption is not double-escaped");
+  pass("snapshot caption markup is not double-escaped");
+
   // --- 3. View event ---
   log("POST view event...");
   const viewRes = await fetch(`${base}/api/recipients/${recipientId}/view`, {
