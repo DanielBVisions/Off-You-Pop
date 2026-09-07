@@ -119,6 +119,7 @@ async function main() {
     });
     const createBody = await createRes.json();
     assert.strictEqual(createRes.status, 201, `create status 201, got ${createRes.status}: ${JSON.stringify(createBody)}`);
+    assert.strictEqual(createRes.headers.get("access-control-allow-origin"), "*", "create response carries CORS header");
     assert.ok(createBody.id && createBody.landingUrl, "response has id + landingUrl");
     assert.strictEqual(createBody.snapshots.length, images.length, "response returns one snapshot row per image");
 
@@ -134,6 +135,21 @@ async function main() {
     }
     return createBody;
   }
+
+  // --- 0. CORS — the actual bug found via the Figma plugin console: its
+  // UI runs in an origin "null" iframe, and a browser blocks any
+  // cross-origin fetch without an explicit Access-Control-Allow-Origin,
+  // failing silently before the request even reaches the server (nothing
+  // in Vercel's logs). Verify both the preflight and the real response
+  // carry it, not just assume the header is there. ---
+  log("CORS preflight + headers on /api/signoffs...");
+  const preflightRes = await fetch(`${base}/api/signoffs`, {
+    method: "OPTIONS",
+    headers: { Origin: "null", "Access-Control-Request-Method": "POST" },
+  });
+  assert.strictEqual(preflightRes.status, 204, "OPTIONS preflight returns 204");
+  assert.strictEqual(preflightRes.headers.get("access-control-allow-origin"), "*", "preflight allows any origin");
+  pass("CORS preflight handled correctly");
 
   // --- 1. Create a single_frame sign-off (plugin flow) ---
   log("POST /api/signoffs (create) + snapshot upload...");
