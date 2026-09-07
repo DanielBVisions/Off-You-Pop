@@ -306,6 +306,16 @@ async function main() {
   );
   const brandRecipientId = brandCreateBody.landingUrl.split("/").pop();
 
+  // Multi-frame carousel: nav arrows, dots and the "1 / N" counter should
+  // only appear once there's more than one frame to flick through.
+  const brandLandingHtml = await (await fetch(brandCreateBody.landingUrl)).text();
+  assert.match(brandLandingHtml, /<div class="carousel-slide is-active" data-index="0">/, "first frame starts active");
+  assert.match(brandLandingHtml, /id="carousel-prev"/, "carousel has a prev button for multi-frame sign-offs");
+  assert.match(brandLandingHtml, /id="carousel-next"/, "carousel has a next button for multi-frame sign-offs");
+  assert.match(brandLandingHtml, /class="carousel-dot is-active" type="button" data-index="0"/, "first dot starts active");
+  assert.match(brandLandingHtml, /1 \/ 2/, "counter shows 1 / 2 for a two-frame sign-off");
+  pass("multi-frame carousel renders nav, dots and counter");
+
   const brandSignRes = await fetch(`${base}/api/recipients/${brandRecipientId}/sign`, { method: "POST", body: "{}" });
   const brandSignBody = await brandSignRes.json();
   assert.strictEqual(brandSignRes.status, 200, JSON.stringify(brandSignBody));
