@@ -10,6 +10,11 @@ import type {
   UiToMainMessage,
 } from "./types";
 
+// The team's deployed backend — defaulted so nobody but the person
+// managing deployments needs to touch Settings. Still overridable there
+// (e.g. pointing at a local dev server), it just isn't required anymore.
+const DEFAULT_API_BASE_URL = "https://off-you-pop.vercel.app";
+
 // ---------------------------------------------------------------------------
 // State
 // ---------------------------------------------------------------------------
@@ -108,6 +113,10 @@ window.onmessage = (event: MessageEvent) => {
 
     case "settings":
       state.settings = msg.settings;
+      if (!state.settings.apiBaseUrl.trim()) {
+        state.settings.apiBaseUrl = DEFAULT_API_BASE_URL;
+        send({ type: "set-settings", settings: state.settings });
+      }
       if (state.view === "settings") renderSettingsView();
       updateSendButtonState();
       break;
