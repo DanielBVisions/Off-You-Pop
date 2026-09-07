@@ -67,21 +67,6 @@ async function exportNodePng(
   });
 }
 
-// Vector, not raster: a PNG at any fixed scale is only ever crisp up to the
-// pixel density it was exported at, and the landing page displays a frame
-// at whatever width the client's browser window happens to be — no single
-// scale is guaranteed to still look sharp there. SVG has no fixed
-// resolution, so it stays crisp at full-bleed on any screen, any zoom.
-// svgOutlineText converts text to paths at export time (Figma's own
-// default), so the design doesn't depend on the viewer's browser having
-// the same fonts installed.
-async function exportNodeSvg(node: SceneNode): Promise<Uint8Array> {
-  return node.exportAsync({
-    format: "SVG",
-    svgOutlineText: true,
-  });
-}
-
 figma.on("selectionchange", pushSelection);
 
 figma.ui.onmessage = async (msg: UiToMainMessage) => {
@@ -127,15 +112,15 @@ figma.ui.onmessage = async (msg: UiToMainMessage) => {
 
     case "request-full-export": {
       try {
-        // SVG, not PNG: the landing page displays each frame full-bleed at
-        // whatever width the client's browser happens to be, and no single
-        // fixed-scale raster export stays crisp across every possible
-        // screen size/pixel density (tried 1x, tried 2x — both eventually
-        // looked blurry somewhere). SVG has no fixed resolution, so this
-        // sidesteps the problem rather than tuning a scale number forever.
-        // The per-frame upload step (not one combined request) still keeps
-        // each upload well under Vercel's body-size limit even for a
-        // complex, vector-heavy frame.
+        // PNG at 2x, not SVG: SVG export (with text outlined to paths) was
+        // tried to fix blur at full-bleed display sizes, but exporting a
+        // large, content-heavy, multi-section frame that way is heavy
+        // enough to crash Figma outright — a real crash is worse than
+        // softness on an oversized monitor. The landing page's CSS caps
+        // display width at the image's own resolution (no upscaling past
+        // native size — see lib/landing-template.js), so 2x is sharp on
+        // anything up to a ~2x-density screen at the frame's native
+        // design width without needing a vector export.
         const exports: { id: string; name: string; bytes: number[] }[] = [];
         for (const id of msg.nodeIds) {
           const node = selectedNodesById.get(id);
@@ -144,7 +129,7 @@ figma.ui.onmessage = async (msg: UiToMainMessage) => {
               `A selected frame ("${id}") is no longer available — it may have been deleted or deselected. Re-select your frames and try again.`,
             );
           }
-          const bytes = await exportNodeSvg(node);
+          const bytes = await exportNodePng(node, 2);
           exports.push({ id, name: node.name, bytes: Array.from(bytes) });
         }
         postToUi({
