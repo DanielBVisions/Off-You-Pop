@@ -103,6 +103,14 @@ async function main() {
   await new Promise((r) => setTimeout(r, 150));
 
   const base = `http://127.0.0.1:${APP_PORT}`;
+
+  log("GET /api/health...");
+  const healthRes = await fetch(`${base}/api/health`);
+  const healthBody = await healthRes.json();
+  assert.strictEqual(healthBody.supabase.reachable, true, JSON.stringify(healthBody));
+  assert.strictEqual(healthBody.resend.ok, true, JSON.stringify(healthBody));
+  pass("health check reports Supabase + Resend both reachable");
+
   const onePxPng = Buffer.from(
     "iVBORw0KGgoAAAANSUhEUgAAAAEAAAABCAQAAAC1HAwCAAAAC0lEQVR42mNk+A8AAQUBAScY42YAAAAASUVORK5CYII=",
     "base64",

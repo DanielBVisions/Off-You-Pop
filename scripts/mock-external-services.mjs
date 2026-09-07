@@ -284,6 +284,9 @@ const server = createServer(async (req, res) => {
       console.log(`[mock resend] -> ${body.to} :: ${body.subject}`);
       return send(200, { id: crypto.randomUUID() });
     }
+    if (url.pathname === "/domains" && req.method === "GET") {
+      return send(200, { data: [] }); // lib/resend.js's checkResendKey() just needs a 2xx
+    }
 
     // --- Figma ---
     const figmaMatch = url.pathname.match(/^\/v1\/images\/([^/]+)$/);

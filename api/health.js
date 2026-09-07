@@ -5,6 +5,7 @@
 
 const { sendJson, methodNotAllowed, withErrorHandling } = require("../lib/http");
 const { pgSelect } = require("../lib/supabase");
+const { checkResendKey } = require("../lib/resend");
 
 const REQUIRED_ENV = [
   "SUPABASE_URL",
@@ -37,6 +38,8 @@ module.exports = withErrorHandling(async (req, res) => {
     }
   }
 
+  const resend = await checkResendKey();
+
   const ok = missing.length === 0 && supabase.reachable;
-  return sendJson(res, ok ? 200 : 503, { ok, env, missingEnvVars: missing, supabase });
+  return sendJson(res, ok ? 200 : 503, { ok, env, missingEnvVars: missing, supabase, resend });
 });
