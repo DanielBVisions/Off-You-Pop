@@ -2,7 +2,7 @@
   "rewrites": [
     { "source": "/", "destination": "/api/dashboard" },
     { "source": "/dashboard", "destination": "/api/dashboard" },
-    { "source": "/dashboard/:id", "destination": "/api/dashboard/:id" },
-    { "source": "/s/:id", "destination": "/api/s/:id" }
+    { "source": "/dashboard/:id", "destination": "/api/dashboard?id=:id" },
+    { "source": "/s/:id", "destination": "/api/s?id=:id" }
   ]
 }
