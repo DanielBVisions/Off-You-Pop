@@ -292,9 +292,13 @@ async function main() {
   const detailRes = await fetch(`${base}/dashboard/${createBody.id}`, { headers: { Cookie: cookie } });
   const detailHtml = await detailRes.text();
   assert.strictEqual(detailRes.status, 200);
-  for (const eventType of ["created", "viewed", "signed", "certificate_downloaded"]) {
-    assert.ok(detailHtml.includes(eventType), `audit trail includes '${eventType}' event`);
+  for (const eventLabel of ["Created", "Viewed", "Signed", "Certificate downloaded"]) {
+    assert.ok(detailHtml.includes(eventLabel), `audit trail includes '${eventLabel}' event`);
   }
+  // The audit trail shows a human summary per event, not the raw metadata
+  // JSON that used to sit next to it (e.g. {"createdBy":"Dan"} verbatim).
+  assert.match(detailHtml, />by Dan<\/div>/, "'created' event shows a readable 'by <name>' summary, not raw JSON");
+  assert.doesNotMatch(detailHtml, /\{&quot;createdBy&quot;/, "raw event metadata JSON is not dumped into the audit trail");
   assert.match(detailHtml, /jo@acme\.com/);
   pass("detail page shows full audit trail + recipient");
 
@@ -387,7 +391,8 @@ async function main() {
   pass("re-signing after reset succeeds (old certificate/export were actually cleared, not left dangling)");
 
   const brandDetailHtml = await (await fetch(`${base}/dashboard/${brandCreateBody.id}`, { headers: { Cookie: cookie } })).text();
-  assert.match(brandDetailHtml, />reset</, "audit trail includes the 'reset' event");
+  assert.match(brandDetailHtml, />Reset</, "audit trail includes the 'reset' event");
+  assert.match(brandDetailHtml, /was signed/, "'reset' event's summary shows the status it reset from");
   pass("reset is recorded in the audit trail");
 
   console.log("\n\x1b[32mAll smoke-test steps passed.\x1b[0m");
