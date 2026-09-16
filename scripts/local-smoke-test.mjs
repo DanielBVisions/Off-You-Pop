@@ -306,7 +306,7 @@ async function main() {
   // certificate link (built via a nested html`` call not wrapped in raw())
   // rendered as visible literal tag text next to the status pill instead
   // of an actual link.
-  assert.match(detailHtml, /<a class="btn btn-secondary"[^>]*>Certificate<\/a>/, "certificate link renders as a real link, not escaped tag text");
+  assert.match(detailHtml, /<a class="btn btn-secondary[^"]*"[^>]*>Certificate<\/a>/, "certificate link renders as a real link, not escaped tag text");
   assert.doesNotMatch(detailHtml, /&lt;a class=&quot;btn/, "certificate link markup is not double-escaped");
   pass("dashboard recipient certificate link is not double-escaped");
 
