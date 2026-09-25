@@ -206,6 +206,7 @@ async function main() {
   assert.match(landingHtml1, /Acme Website Redesign/);
   assert.match(landingHtml1, /Sign off/);
   assert.match(landingHtml1, /style="width:1440px"/, "frame displays at its recorded Figma design width, not the exported image's own pixel size");
+  assert.doesNotMatch(landingHtml1, /<iframe/, "no figma_file_key on this record — falls back to the static image, not a prototype embed");
   pass("landing page renders scope + sign button");
 
   // --- 2b. Regression test for the nested-html`` double-escaping bug: the
@@ -347,9 +348,19 @@ async function main() {
   assert.match(brandLandingHtml, /id="carousel-prev"/, "carousel has a prev button for multi-frame sign-offs");
   assert.match(brandLandingHtml, /id="carousel-next"/, "carousel has a next button for multi-frame sign-offs");
   assert.match(brandLandingHtml, /Logo Primary · 1 \/ 2/, "counter pill shows the first frame's name alongside 1 / 2");
-  assert.match(brandLandingHtml, /style="width:800px"/, "first frame uses its own recorded design width");
-  assert.match(brandLandingHtml, /style="width:400px"/, "second frame uses its own (different) recorded design width, independent of the first");
-  pass("multi-frame carousel renders nav + name-and-counter pill, each frame at its own design width");
+  pass("multi-frame carousel renders nav + name-and-counter pill");
+
+  // --- 13b. Interactive prototype embed, unsigned only: a record with a
+  // figma_file_key gets a live embed.figma.com iframe per frame instead of
+  // the static snapshot image, until it's signed. ---
+  assert.match(brandLandingHtml, /<iframe\s+src="https:\/\/embed\.figma\.com\/proto\/mockfile123\?[^"]*"/, "unsigned record with a figma_file_key gets a live prototype embed");
+  assert.match(brandLandingHtml, /node-id=10-1/, "embed URL uses the frame's node id (colon converted to dash)");
+  assert.match(brandLandingHtml, /starting-point-node-id=10%3A1/, "embed URL's starting point uses the frame's node id with the colon percent-encoded");
+  assert.match(brandLandingHtml, /embed-host=off-you-pop/, "embed URL carries the required embed-host param");
+  assert.match(brandLandingHtml, /hide-ui=1/, "embed URL hides Figma's own toolbar chrome");
+  assert.match(brandLandingHtml, /node-id=10-2/, "second frame's embed also targets its own node id");
+  assert.doesNotMatch(brandLandingHtml, /<img[^>]*alt="Logo Primary"/, "unsigned prototype-embed frame renders the iframe, not also the static image");
+  pass("unsigned sign-off with a figma_file_key shows an interactive prototype embed per frame");
 
   const brandSignRes = await fetch(`${base}/api/recipients/${brandRecipientId}/sign`, { method: "POST", body: "{}" });
   const brandSignBody = await brandSignRes.json();
@@ -357,6 +368,17 @@ async function main() {
   assert.ok(brandSignBody.brandingExport, "sign response includes branding export result");
   assert.strictEqual(brandSignBody.brandingExport.status, "complete", JSON.stringify(brandSignBody.brandingExport));
   pass("branding export completed synchronously with the sign request");
+
+  // --- 13c. Interactive prototype embed freezes to the static image once
+  // signed — the whole point being that a signed record permanently means
+  // "this exact image was approved", which a live, still-navigable embed
+  // can't guarantee. ---
+  const brandLandingHtmlSigned = await (await fetch(brandCreateBody.landingUrl)).text();
+  assert.doesNotMatch(brandLandingHtmlSigned, /<iframe/, "once signed, the prototype embed is replaced by the frozen static image, permanently");
+  assert.match(brandLandingHtmlSigned, /<img[^>]*alt="Logo Primary"/, "signed record shows the static snapshot image instead");
+  assert.match(brandLandingHtmlSigned, /style="width:800px"/, "first frame uses its own recorded design width");
+  assert.match(brandLandingHtmlSigned, /style="width:400px"/, "second frame uses its own (different) recorded design width, independent of the first");
+  pass("prototype embed freezes to the static snapshot once signed, each frame still at its own recorded design width");
 
   const zipRes = await fetch(brandSignBody.brandingExport.zipUrl);
   const zipBytes = Buffer.from(await zipRes.arrayBuffer());
